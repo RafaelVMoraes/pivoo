@@ -14,6 +14,7 @@ interface Goal {
   priority: string;
 }
 
+
 interface AnalysisConfiguratorProps {
   moduleId: ModuleId;
   inputs: AnalysisInputs;
