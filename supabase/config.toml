@@ -1,0 +1,10 @@
+project_id = "yeyoydltgoftjnaqcwky"
+
+[functions.Chatbot-gemini]
+verify_jwt = true
+
+[functions.google-ai-chat]
+verify_jwt = true
+
+[functions.analysis-chat]
+verify_jwt = true

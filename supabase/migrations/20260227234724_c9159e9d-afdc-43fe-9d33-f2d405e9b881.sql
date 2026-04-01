@@ -1,0 +1,1 @@
+ALTER TABLE public.monthly_reflections ADD COLUMN IF NOT EXISTS overall_sentiment integer;
