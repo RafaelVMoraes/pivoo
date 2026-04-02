@@ -30,6 +30,7 @@ import {
 
 import type { ActivityWithGoal, CheckInRecord } from '@/hooks/useAllActivities';
 import type { TaskData } from '@/components/goals/views/TaskSection';
+import { EXECUTION_STATUS, type ExecutionStatus, isCheckInDone, resolveExecutionStatus } from '@/lib/checkInStatus';
 
 /**
  * Order for time of day buckets.
@@ -96,23 +97,17 @@ const normalizeDayName = (day: string): (typeof DAY_NAMES)[number] | null => {
   }
 };
 
-/**
- * Determines if a given activity has a completed check-in for the execution date.
- * Completion is based on valid progress values.
- */
-const COMPLETED_PROGRESS_VALUES = ['done', 'no_evolution', 'some_evolution', 'good_evolution'];
-
 const getExecutionStatus = (
   activityId: string,
   executionDate: Date,
   checkIns: CheckInRecord[]
-): 'done' | 'not_done' | 'pending' => {
+): ExecutionStatus => {
   const dayRecords = checkIns.filter((ci) => ci.activity_id === activityId && isSameDay(new Date(ci.date), executionDate));
 
-  if (dayRecords.some((ci) => ci.progress_value === 'not_done')) return 'not_done';
-  if (dayRecords.some((ci) => COMPLETED_PROGRESS_VALUES.includes(ci.progress_value))) return 'done';
+  if (dayRecords.some((ci) => resolveExecutionStatus(ci) === EXECUTION_STATUS.NOT_DONE)) return EXECUTION_STATUS.NOT_DONE;
+  if (dayRecords.some((ci) => isCheckInDone(ci))) return EXECUTION_STATUS.DONE;
 
-  return 'pending';
+  return EXECUTION_STATUS.PENDING;
 };
 
 /**
@@ -292,7 +287,7 @@ export const transformActivitiesToExecutionTasks = (
         if (activity.end_date && isAfter(executionDate, startOfDay(new Date(activity.end_date)))) continue;
 
         const executionStatus = getExecutionStatus(activity.id, executionDate, checkIns);
-        if (executionStatus !== 'pending') continue;
+        if (executionStatus !== EXECUTION_STATUS.PENDING) continue;
 
         const isLate = !isSameDay(executionDate, todayStart) && executionDate.getTime() < todayStart.getTime();
         const task = createTaskData(activity, executionDate, now, isLate);
@@ -323,7 +318,7 @@ export const transformActivitiesToExecutionTasks = (
         }
 
         const executionStatus = getExecutionStatus(activity.id, executionStart, checkIns);
-        if (executionStatus !== 'pending') return;
+        if (executionStatus !== EXECUTION_STATUS.PENDING) return;
 
         const isToday = isSameDay(executionStart, todayStart);
         const isLate = executionStart.getTime() < todayStart.getTime();
@@ -363,7 +358,7 @@ export const transformActivitiesToExecutionTasks = (
       }
 
       const executionStatus = getExecutionStatus(activity.id, executionDate, checkIns);
-      if (executionStatus !== 'pending') return;
+      if (executionStatus !== EXECUTION_STATUS.PENDING) return;
 
       const isToday = isSameDay(executionDate, todayStart);
       const isLate = executionDate.getTime() < todayStart.getTime();

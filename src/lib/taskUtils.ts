@@ -31,6 +31,7 @@ import {
 
 import { ActivityWithGoal, CheckInRecord } from '@/hooks/useAllActivities';
 import { TaskData } from '@/components/goals/views/TaskSection';
+import { isCheckInDone } from '@/lib/checkInStatus';
 
 /**
  * Used to order tasks by time of day in sorting/grouping.
@@ -61,7 +62,7 @@ const DAY_NAMES_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 
 
 /**
  * Determines whether an activity is completed for the current execution window.
- * Completion means at least one check-in (progress_value === 'done') in the current period.
+ * Completion means at least one check-in resolved as execution_status === 'done' in the current period.
  *
  * @param activity ActivityWithGoal to check
  * @param checkIns List of all check-in records
@@ -75,7 +76,7 @@ export const isActivityCompletedForWindow = (
 ): boolean => {
   // Filter for relevant check-ins (by activity id, and must be marked 'done')
   const activityCheckIns = checkIns.filter(
-    (ci) => ci.activity_id === activity.id && ci.progress_value === 'done'
+    (ci) => ci.activity_id === activity.id && isCheckInDone(ci)
   );
 
   if (activityCheckIns.length === 0) return false;
@@ -126,7 +127,7 @@ export const isActivityCompletedForDate = (
 
   return checkIns.some((ci) => {
     if (ci.activity_id !== activity.id) return false;
-    if (ci.progress_value !== 'done') return false;
+    if (!isCheckInDone(ci)) return false;
     const checkInDate = new Date(ci.date);
     return checkInDate >= dayStart && checkInDate <= dayEnd;
   });

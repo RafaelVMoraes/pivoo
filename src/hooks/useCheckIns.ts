@@ -20,6 +20,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { deriveScoreValue, resolveExecutionStatus, type ExecutionStatus } from '@/lib/checkInStatus';
 
 /**
  * Shape of a single check-in record.
@@ -32,6 +33,8 @@ export interface CheckIn {
   date: string;
   progress_value: string;
   input_type: 'numeric' | 'checkbox' | 'percentage';
+  execution_status?: ExecutionStatus | null;
+  score_value?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -107,11 +110,16 @@ export const useCheckIns = (goalId?: string, activityId?: string) => {
     if (isGuest || !user) return;
 
     try {
+      const derivedExecutionStatus = resolveExecutionStatus(checkInData);
+      const derivedScoreValue = deriveScoreValue(checkInData);
+
       const { data, error } = await supabase
         .from('check_ins')
         .insert({
           ...checkInData,
           user_id: user.id,
+          execution_status: checkInData.execution_status ?? derivedExecutionStatus,
+          score_value: checkInData.score_value ?? derivedScoreValue,
         })
         .select()
         .single();
@@ -149,9 +157,18 @@ export const useCheckIns = (goalId?: string, activityId?: string) => {
     if (isGuest || !user) return;
 
     try {
+      const nextUpdates: Partial<CheckIn> = { ...updates };
+      const hasProgressUpdate = 'progress_value' in nextUpdates || 'input_type' in nextUpdates;
+      if (hasProgressUpdate && !('execution_status' in nextUpdates)) {
+        nextUpdates.execution_status = resolveExecutionStatus(nextUpdates);
+      }
+      if (hasProgressUpdate && !('score_value' in nextUpdates)) {
+        nextUpdates.score_value = deriveScoreValue(nextUpdates);
+      }
+
       const { data, error } = await supabase
         .from('check_ins')
-        .update(updates)
+        .update(nextUpdates)
         .eq('id', checkInId)
         .eq('user_id', user.id)
         .select()
