@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-
-// ========== Scale Categories ==========
+import { queryKeys } from '@/lib/queryKeys';
 
 export const SENTIMENT_SCALE = [
   { value: 1, emoji: '😭', word: { en: 'Awful', pt: 'Péssimo', fr: 'Horrible' } },
@@ -19,8 +19,6 @@ export const SENTIMENT_SCALE = [
 ] as const;
 
 export const WEEKLY_SENTIMENT_CATEGORY = 'overall_sentiment';
-
-// ========== Monthly Evaluation Options ==========
 
 export const MONTHLY_EVAL_OPTIONS = {
   goal_progress: [
@@ -88,8 +86,6 @@ export const MONTHLY_EVAL_QUESTIONS: Record<string, { en: string; pt: string; fr
   },
 };
 
-// ========== Types ==========
-
 export interface WeeklyEvaluation {
   id: string;
   user_id: string;
@@ -112,13 +108,11 @@ export interface MonthlyReflection {
   personal_evolution?: string;
 }
 
-// ========== Helpers ==========
-
 export const getWeeksInMonth = (year: number, month: number): number => {
   const firstDay = new Date(year, month - 1, 1);
   const lastDay = new Date(year, month, 0);
   const totalDays = lastDay.getDate();
-  const firstDayOfWeek = firstDay.getDay(); // 0=Sun
+  const firstDayOfWeek = firstDay.getDay();
   return Math.ceil((totalDays + firstDayOfWeek) / 7);
 };
 
@@ -128,31 +122,27 @@ export const getMonthName = (month: number, lang: string): string => {
   return date.toLocaleString(locale, { month: 'long' });
 };
 
-// ========== Hook ==========
+interface JournalingPayload {
+  weeklyEvals: WeeklyEvaluation[];
+  monthlyReflection: MonthlyReflection | null;
+}
 
 export const useJournaling = (year: number, month: number) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const key = queryKeys.journaling.byMonth(user?.id, year, month);
 
-  const [weeklyEvals, setWeeklyEvals] = useState<WeeklyEvaluation[]>([]);
-  const [monthlyReflection, setMonthlyReflection] = useState<MonthlyReflection | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const fetchData = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
+  const dataQuery = useQuery({
+    queryKey: key,
+    enabled: !!user,
+    queryFn: async (): Promise<JournalingPayload> => {
       const [weeklyRes, monthlyRes] = await Promise.all([
-        supabase
-          .from('weekly_evaluations')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('year', year)
-          .eq('month', month),
+        supabase.from('weekly_evaluations').select('*').eq('user_id', user!.id).eq('year', year).eq('month', month),
         supabase
           .from('monthly_reflections')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', user!.id)
           .eq('year', year)
           .eq('month', month)
           .maybeSingle(),
@@ -161,97 +151,62 @@ export const useJournaling = (year: number, month: number) => {
       if (weeklyRes.error) throw weeklyRes.error;
       if (monthlyRes.error) throw monthlyRes.error;
 
-      setWeeklyEvals(weeklyRes.data || []);
-      setMonthlyReflection(monthlyRes.data);
-    } catch (err) {
-      console.error('Error fetching journaling data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [user, year, month]);
+      return { weeklyEvals: weeklyRes.data || [], monthlyReflection: monthlyRes.data };
+    },
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const upsertWeeklyEval = async (weekNumber: number, scaleCategory: string, scaleValue: number) => {
-    if (!user) return;
-    try {
-      const { error } = await supabase
-        .from('weekly_evaluations')
-        .upsert({
+  const upsertWeeklyMutation = useMutation({
+    mutationFn: async ({ weekNumber, scaleCategory, scaleValue }: { weekNumber: number; scaleCategory: string; scaleValue: number }) => {
+      if (!user) return;
+      const { error } = await supabase.from('weekly_evaluations').upsert(
+        {
           user_id: user.id,
           year,
           month,
           week_number: weekNumber,
           scale_category: scaleCategory,
           scale_value: scaleValue,
-        }, { onConflict: 'user_id,year,month,week_number,scale_category' });
-
+        },
+        { onConflict: 'user_id,year,month,week_number,scale_category' }
+      );
       if (error) throw error;
-
-      // Optimistic update
-      setWeeklyEvals(prev => {
-        const filtered = prev.filter(
-          e => !(e.week_number === weekNumber && e.scale_category === scaleCategory)
-        );
-        return [...filtered, {
-          id: 'temp',
-          user_id: user.id,
-          year,
-          month,
-          week_number: weekNumber,
-          scale_category: scaleCategory,
-          scale_value: scaleValue,
-        }];
-      });
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error('Error saving weekly eval:', err);
-      toast({
-        title: 'Error',
-        description: 'Failed to save evaluation',
-        variant: 'destructive',
-      });
-    }
-  };
+      toast({ title: 'Error', description: 'Failed to save evaluation', variant: 'destructive' });
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
 
-  const upsertMonthlyReflection = async (data: Partial<MonthlyReflection>) => {
-    if (!user) return;
-    try {
-      const { data: result, error } = await supabase
+  const upsertMonthlyMutation = useMutation({
+    mutationFn: async (data: Partial<MonthlyReflection>) => {
+      if (!user) return;
+      const { error } = await supabase
         .from('monthly_reflections')
-        .upsert({
-          user_id: user.id,
-          year,
-          month,
-          ...data,
-        }, { onConflict: 'user_id,year,month' })
-        .select()
-        .single();
-
+        .upsert({ user_id: user.id, year, month, ...data }, { onConflict: 'user_id,year,month' });
       if (error) throw error;
-      setMonthlyReflection(result);
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error('Error saving monthly reflection:', err);
-      toast({
-        title: 'Error',
-        description: 'Failed to save reflection',
-        variant: 'destructive',
-      });
-    }
-  };
+      toast({ title: 'Error', description: 'Failed to save reflection', variant: 'destructive' });
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
 
   return {
-    weeklyEvals,
-    monthlyReflection,
-    loading,
-    upsertWeeklyEval,
-    upsertMonthlyReflection,
-    refetch: fetchData,
+    weeklyEvals: user ? dataQuery.data?.weeklyEvals || [] : [],
+    monthlyReflection: user ? dataQuery.data?.monthlyReflection || null : null,
+    loading: dataQuery.isLoading,
+    upsertWeeklyEval: (weekNumber: number, scaleCategory: string, scaleValue: number) =>
+      upsertWeeklyMutation.mutateAsync({ weekNumber, scaleCategory, scaleValue }),
+    upsertMonthlyReflection: upsertMonthlyMutation.mutateAsync,
+    refetch: dataQuery.refetch,
   };
 };
-
-// ========== Summary Hook ==========
 
 export const useJournalingSummary = (year: number) => {
   const { user } = useAuth();
@@ -267,19 +222,8 @@ export const useJournalingSummary = (year: number) => {
       setLoading(true);
       try {
         const [weeklyRes, monthlyRes] = await Promise.all([
-          supabase
-            .from('weekly_evaluations')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('year', year)
-            .order('month')
-            .order('week_number'),
-          supabase
-            .from('monthly_reflections')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('year', year)
-            .order('month'),
+          supabase.from('weekly_evaluations').select('*').eq('user_id', user.id).eq('year', year).order('month').order('week_number'),
+          supabase.from('monthly_reflections').select('*').eq('user_id', user.id).eq('year', year).order('month'),
         ]);
         setSummaryData({
           weeklyEvals: weeklyRes.data || [],

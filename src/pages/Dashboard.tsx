@@ -20,7 +20,6 @@ export const Dashboard = () => {
     todaysFocusCardData,
     weeklyOverviewData,
     goalsHabitsCardData,
-    refetchActivities,
   } = useDashboardStats();
 
   return (
@@ -53,7 +52,6 @@ export const Dashboard = () => {
         data={todaysFocusCardData} 
         isLoading={isLoading} 
         isGuest={isGuest}
-        onRefresh={refetchActivities}
       />
       </div>
 

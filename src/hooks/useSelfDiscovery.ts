@@ -1,22 +1,10 @@
-/**
- * useSelfDiscovery.ts
- *
- * This hook manages the user's Self-Discovery data, including:
- *   - The "Life Wheel" (personal balance/self-rating across themed life areas) — year-specific
- *   - Core values selection and custom values — NOT year-specific
- *   - Personal vision-related fields (future intentions, word/phrase for the year) — year-specific
- *
- * Provides unified state, CRUD methods, data initialization for both guest and authenticated users,
- * and opinionated structure for rendering and analytics in the app.
- */
-
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useYear } from '@/contexts/YearContext';
-
-// ---------- Types & Interfaces ----------
+import { queryKeys } from '@/lib/queryKeys';
 
 export interface LifeWheelData {
   area_name: string;
@@ -40,29 +28,11 @@ export interface VisionData {
   phrase_year?: string;
 }
 
-// ---------- Constants ----------
-
 const LIFE_AREAS_BY_CATEGORY = {
-  'Life Quality': [
-    'Hobbies',
-    'Fulfillment',
-    'Spirituality'
-  ],
-  'Personal': [
-    'Health',
-    'Intellectual',
-    'Emotional'
-  ],
-  'Professional': [
-    'Engagement',
-    'Finances',
-    'Impact'
-  ],
-  'Relationships': [
-    'Colleagues',
-    'Partner',
-    'Family'
-  ]
+  'Life Quality': ['Hobbies', 'Fulfillment', 'Spirituality'],
+  Personal: ['Health', 'Intellectual', 'Emotional'],
+  Professional: ['Engagement', 'Finances', 'Impact'],
+  Relationships: ['Colleagues', 'Partner', 'Family'],
 };
 
 const LIFE_AREAS = Object.values(LIFE_AREAS_BY_CATEGORY).flat();
@@ -72,11 +42,8 @@ const PREDEFINED_VALUES = {
   'Growth & Mastery': ['Learning', 'Curiosity', 'Excellence', 'Innovation', 'Resilience', 'Ambition'],
   'Connection & Community': ['Empathy', 'Belonging', 'Collaboration', 'Diversity', 'Family', 'Generosity'],
   'Well-being & Balance': ['Health', 'Stability', 'Mindfulness', 'Joy', 'Simplicity', 'Peace'],
-  'Purpose & Impact': ['Freedom', 'Contribution', 'Creativity', 'Sustainability', 'Leadership', 'Vision']
+  'Purpose & Impact': ['Freedom', 'Contribution', 'Creativity', 'Sustainability', 'Leadership', 'Vision'],
 };
-
-// ---------- Hook: useSelfDiscovery ----------
-
 
 const VISION_YEAR_MAPPINGS: Array<{ key: 'vision_3y' | 'vision_5y'; offset: number; label: string }> = [
   { key: 'vision_3y', offset: 3, label: '3y vision' },
@@ -90,337 +57,188 @@ const appendVisionReference = (existing: string | null | undefined, label: strin
   const block = `${label} from ${sourceYear}: ${trimmedText}`;
   if (!existing || existing.trim().length === 0) return block;
   if (existing.includes(block)) return existing;
-  return `${existing.trim()}
-
-${block}`;
+  return `${existing.trim()}\n\n${block}`;
 };
+
+interface SelfDiscoveryPayload {
+  lifeWheelData: LifeWheelData[];
+  previousYearLifeWheel: LifeWheelData[];
+  valuesData: ValuesData[];
+  visionData: VisionData;
+}
+
+const defaultLifeWheel = (): LifeWheelData[] =>
+  LIFE_AREAS.map((area) => ({
+    area_name: area,
+    current_score: 5,
+    desired_score: 8,
+    achieved_score: null,
+    is_focus_area: false,
+  }));
+
+const defaultValues = (): ValuesData[] =>
+  Object.values(PREDEFINED_VALUES)
+    .flat()
+    .map((value_name) => ({ value_name, selected: false }));
 
 export const useSelfDiscovery = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const { selectedYear } = useYear();
+  const queryClient = useQueryClient();
+  const [guestLifeWheelData, setGuestLifeWheelData] = useState<LifeWheelData[]>(defaultLifeWheel);
+  const [guestValuesData, setGuestValuesData] = useState<ValuesData[]>(defaultValues);
+  const [guestVisionData, setGuestVisionData] = useState<VisionData>({});
 
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [lifeWheelData, setLifeWheelData] = useState<LifeWheelData[]>([]);
-  const [previousYearLifeWheel, setPreviousYearLifeWheel] = useState<LifeWheelData[]>([]);
-  const [valuesData, setValuesData] = useState<ValuesData[]>([]);
-  const [visionData, setVisionData] = useState<VisionData>({});
+  const key = queryKeys.selfDiscovery.byYear(user?.id, selectedYear);
 
-  useEffect(() => {
-    if (user) {
-      fetchAllData();
-    } else {
-      initializeDefaults();
-    }
-  }, [user, selectedYear]);
-
-  const initializeDefaults = () => {
-    setLifeWheelData(LIFE_AREAS.map(area => ({
-      area_name: area,
-      current_score: 5,
-      desired_score: 8,
-      achieved_score: null,
-      is_focus_area: false
-    })));
-    setPreviousYearLifeWheel([]);
-
-    const allValues: ValuesData[] = [];
-    Object.values(PREDEFINED_VALUES).flat().forEach(value => {
-      allValues.push({ value_name: value, selected: false });
-    });
-    setValuesData(allValues);
-    setVisionData({});
-  };
-
-  const fetchAllData = async () => {
-    if (!user) return;
-
-    setLoading(true);
-    try {
-      await Promise.all([
-        fetchLifeWheel(),
-        fetchPreviousYearLifeWheel(),
-        fetchValues(),
-        fetchVision()
+  const dataQuery = useQuery({
+    queryKey: key,
+    enabled: !!user,
+    queryFn: async (): Promise<SelfDiscoveryPayload> => {
+      const [lifeRes, prevLifeRes, valuesRes, visionRes] = await Promise.all([
+        supabase
+          .from('life_wheel')
+          .select('area_name, current_score, desired_score, achieved_score, is_focus_area')
+          .eq('user_id', user!.id)
+          .eq('year', selectedYear),
+        supabase
+          .from('life_wheel')
+          .select('area_name, current_score, desired_score, achieved_score, is_focus_area')
+          .eq('user_id', user!.id)
+          .eq('year', selectedYear - 1),
+        supabase.from('values').select('value_name, selected').eq('user_id', user!.id),
+        supabase
+          .from('vision')
+          .select('vision_1y, vision_3y, vision_5y, word_year, phrase_year')
+          .eq('user_id', user!.id)
+          .eq('year', selectedYear)
+          .maybeSingle(),
       ]);
-    } catch (error) {
-      console.error('Error fetching self-discovery data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const fetchLifeWheel = async () => {
-    if (!user) return;
+      if (lifeRes.error) throw lifeRes.error;
+      if (prevLifeRes.error) throw prevLifeRes.error;
+      if (valuesRes.error) throw valuesRes.error;
+      if (visionRes.error) throw visionRes.error;
 
-    const { data, error } = await supabase
-      .from('life_wheel')
-      .select('area_name, current_score, desired_score, achieved_score, is_focus_area')
-      .eq('user_id', user.id)
-      .eq('year', selectedYear);
-
-    if (error) {
-      console.error('Error fetching life wheel:', error);
-      return;
-    }
-
-    const defaultData = LIFE_AREAS.map(area => ({
-      area_name: area,
-      current_score: 5,
-      desired_score: 8,
-      achieved_score: null as number | null,
-      is_focus_area: false
-    }));
-
-    const mergedData = defaultData.map(defaultArea => {
-      const existing = data.find(d => d.area_name === defaultArea.area_name);
-      return existing
-        ? { ...existing, is_focus_area: existing.is_focus_area || false }
-        : defaultArea;
-    });
-
-    setLifeWheelData(mergedData);
-  };
-
-  const fetchPreviousYearLifeWheel = async () => {
-    if (!user) return;
-
-    const { data, error } = await supabase
-      .from('life_wheel')
-      .select('area_name, current_score, desired_score, achieved_score, is_focus_area')
-      .eq('user_id', user.id)
-      .eq('year', selectedYear - 1);
-
-    if (error) {
-      console.error('Error fetching previous year life wheel:', error);
-      setPreviousYearLifeWheel([]);
-      return;
-    }
-
-    setPreviousYearLifeWheel(data || []);
-  };
-
-  const fetchValues = async () => {
-    if (!user) return;
-
-    const { data, error } = await supabase
-      .from('values')
-      .select('value_name, selected')
-      .eq('user_id', user.id);
-
-    if (error) {
-      console.error('Error fetching values:', error);
-      return;
-    }
-
-    const allValues: ValuesData[] = [];
-    Object.values(PREDEFINED_VALUES).flat().forEach(value => {
-      const existing = data?.find(d => d.value_name === value);
-      allValues.push({
-        value_name: value,
-        selected: existing?.selected || false
+      const mergedLifeWheel = defaultLifeWheel().map((defaultArea) => {
+        const existing = lifeRes.data?.find((d) => d.area_name === defaultArea.area_name);
+        return existing ? { ...existing, is_focus_area: existing.is_focus_area || false } : defaultArea;
       });
-    });
 
-    data?.forEach(d => {
-      const isPredefined = Object.values(PREDEFINED_VALUES).flat().includes(d.value_name);
-      if (!isPredefined) {
-        allValues.push({
-          value_name: d.value_name,
-          selected: d.selected
-        });
+      const allValues: ValuesData[] = [];
+      const predefined = Object.values(PREDEFINED_VALUES).flat();
+      predefined.forEach((value) => {
+        const existing = valuesRes.data?.find((d) => d.value_name === value);
+        allValues.push({ value_name: value, selected: existing?.selected || false });
+      });
+
+      valuesRes.data?.forEach((d) => {
+        if (!predefined.includes(d.value_name)) {
+          allValues.push({ value_name: d.value_name, selected: d.selected });
+        }
+      });
+
+      let visionData: VisionData = visionRes.data || {};
+      if (!visionRes.data) {
+        const { data: pastVisions, error } = await supabase
+          .from('vision')
+          .select('year, vision_1y, vision_3y, vision_5y')
+          .eq('user_id', user!.id)
+          .lt('year', selectedYear)
+          .order('year', { ascending: false });
+
+        if (error) throw error;
+
+        const populated: VisionData = {};
+        for (const pv of pastVisions || []) {
+          if (pv.year + 1 === selectedYear && pv.vision_1y && !populated.vision_1y) populated.vision_1y = pv.vision_1y;
+          if (pv.year + 3 === selectedYear && pv.vision_3y && !populated.vision_1y) populated.vision_1y = pv.vision_3y;
+          if (pv.year + 5 === selectedYear && pv.vision_5y && !populated.vision_1y) populated.vision_1y = pv.vision_5y;
+        }
+        visionData = populated;
       }
-    });
 
-    setValuesData(allValues);
-  };
-
-  const fetchVision = async () => {
-    if (!user) return;
-
-    const { data, error } = await supabase
-      .from('vision')
-      .select('vision_1y, vision_3y, vision_5y, word_year, phrase_year')
-      .eq('user_id', user.id)
-      .eq('year', selectedYear)
-      .maybeSingle();
-
-    if (error) {
-      console.error('Error fetching vision:', error);
-      return;
-    }
-
-    if (data) {
-      setVisionData(data);
-    } else {
-      // Try to auto-populate from previous years' future visions
-      await autoPopulateVisionFromPast();
-    }
-  };
-
-  /**
-   * Auto-populate vision for the selected year from previous years' future visions.
-   * E.g., if in 2024 user set vision_3y, that targets 2027. When selectedYear=2027, use it as vision_1y suggestion.
-   */
-  const autoPopulateVisionFromPast = async () => {
-    if (!user) return;
-
-    const { data: pastVisions, error } = await supabase
-      .from('vision')
-      .select('year, vision_1y, vision_3y, vision_5y')
-      .eq('user_id', user.id)
-      .lt('year', selectedYear)
-      .order('year', { ascending: false });
-
-    if (error || !pastVisions?.length) {
-      setVisionData({});
-      return;
-    }
-
-    const populated: VisionData = {};
-
-    for (const pv of pastVisions) {
-      // If past year + 1 = selectedYear, their vision_1y maps to now
-      if (pv.year + 1 === selectedYear && pv.vision_1y && !populated.vision_1y) {
-        populated.vision_1y = pv.vision_1y;
-      }
-      // If past year + 3 = selectedYear, their vision_3y maps to now
-      if (pv.year + 3 === selectedYear && pv.vision_3y && !populated.vision_1y) {
-        populated.vision_1y = pv.vision_3y;
-      }
-      // If past year + 5 = selectedYear, their vision_5y maps to now
-      if (pv.year + 5 === selectedYear && pv.vision_5y && !populated.vision_1y) {
-        populated.vision_1y = pv.vision_5y;
-      }
-    }
-
-    setVisionData(populated);
-  };
-
-  // ======= Mutating Handlers =======
-
-  const updateLifeWheel = async (areaName: string, updates: Partial<LifeWheelData>) => {
-    if (!user) {
-      setLifeWheelData(prev => prev.map(item =>
-        item.area_name === areaName ? { ...item, ...updates } : item
-      ));
-      return;
-    }
-
-    const currentData = lifeWheelData.find(d => d.area_name === areaName);
-    const mergedData = { ...currentData, ...updates };
-
-    // Optimistic local update
-    setLifeWheelData(prev => prev.map(item =>
-      item.area_name === areaName ? { ...item, ...updates } : item
-    ));
-
-    setSaving(true);
-    try {
-      const dataToUpsert = {
-        user_id: user.id,
-        area_name: areaName,
-        year: selectedYear,
-        current_score: mergedData.current_score || 5,
-        desired_score: mergedData.desired_score || 8,
-        is_focus_area: mergedData.is_focus_area ?? false,
-        achieved_score: mergedData.achieved_score ?? null,
+      return {
+        lifeWheelData: mergedLifeWheel,
+        previousYearLifeWheel: prevLifeRes.data || [],
+        valuesData: allValues,
+        visionData,
       };
+    },
+  });
 
-      const { error } = await supabase
-        .from('life_wheel')
-        .upsert(dataToUpsert, {
-          onConflict: 'user_id,area_name,year'
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: "Saved",
-        description: "Life wheel updated successfully",
-        duration: 2000,
-      });
-    } catch (error) {
-      console.error('Error updating life wheel:', error);
-      toast({
-        title: "Error",
-        description: "Couldn't save changes, please retry",
-        variant: "destructive",
-      });
-      fetchLifeWheel();
-    } finally {
-      setSaving(false);
-    }
+  const applyPatch = (patch: Partial<SelfDiscoveryPayload>) => {
+    queryClient.setQueryData<SelfDiscoveryPayload>(key, (previous) => {
+      if (!previous) return previous;
+      return { ...previous, ...patch };
+    });
   };
 
-  const updateValues = async (valueName: string, selected: boolean) => {
-    const currentSelected = valuesData.filter(v => v.selected).length;
-    if (selected && currentSelected >= 7) {
-      toast({
-        title: "Maximum reached",
-        description: "You can select up to 7 values only",
-        variant: "destructive",
+  const handleError = (description: string, error: unknown) => {
+    console.error(description, error);
+    toast({ title: 'Error', description, variant: 'destructive' });
+  };
+
+  const updateLifeWheelMutation = useMutation({
+    mutationFn: async ({ areaName, updates }: { areaName: string; updates: Partial<LifeWheelData> }) => {
+      if (!user) return;
+      const currentData = (dataQuery.data?.lifeWheelData || []).find((d) => d.area_name === areaName);
+      const mergedData = { ...currentData, ...updates };
+      const { error } = await supabase.from('life_wheel').upsert(
+        {
+          user_id: user.id,
+          area_name: areaName,
+          year: selectedYear,
+          current_score: mergedData.current_score || 5,
+          desired_score: mergedData.desired_score || 8,
+          is_focus_area: mergedData.is_focus_area ?? false,
+          achieved_score: mergedData.achieved_score ?? null,
+        },
+        { onConflict: 'user_id,area_name,year' }
+      );
+      if (error) throw error;
+    },
+    onMutate: async ({ areaName, updates }) => {
+      applyPatch({
+        lifeWheelData: (dataQuery.data?.lifeWheelData || []).map((item) =>
+          item.area_name === areaName ? { ...item, ...updates } : item
+        ),
       });
-      return;
-    }
+    },
+    onSuccess: () => {
+      toast({ title: 'Saved', description: 'Life wheel updated successfully', duration: 2000 });
+    },
+    onError: (error) => {
+      handleError("Couldn't save changes, please retry", error);
+      queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
 
-    setValuesData(prev => prev.map(item =>
-      item.value_name === valueName ? { ...item, selected } : item
-    ));
-
-    if (!user) return;
-
-    setSaving(true);
-    try {
+  const updateValuesMutation = useMutation({
+    mutationFn: async ({ valueName, selected }: { valueName: string; selected: boolean }) => {
+      if (!user) return;
       const { error } = await supabase
         .from('values')
-        .upsert({
-          user_id: user.id,
-          value_name: valueName,
-          selected
-        }, {
-          onConflict: 'user_id,value_name'
-        });
-
+        .upsert({ user_id: user.id, value_name: valueName, selected }, { onConflict: 'user_id,value_name' });
       if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Saved', description: 'Values updated successfully', duration: 2000 });
+    },
+    onError: (error) => {
+      handleError("Couldn't save changes, please retry", error);
+      queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
 
-      toast({
-        title: "Saved",
-        description: "Values updated successfully",
-        duration: 2000,
-      });
-    } catch (error) {
-      console.error('Error updating values:', error);
-      toast({
-        title: "Error",
-        description: "Couldn't save changes, please retry",
-        variant: "destructive",
-      });
-      fetchValues();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const updateVision = async (updates: Partial<VisionData>) => {
-    const nextVision = { ...visionData, ...updates };
-    setVisionData(nextVision);
-
-    if (!user) return;
-
-    setSaving(true);
-    try {
+  const updateVisionMutation = useMutation({
+    mutationFn: async (updates: Partial<VisionData>) => {
+      if (!user) return;
+      const nextVision = { ...(dataQuery.data?.visionData || {}), ...updates };
       const { error } = await supabase
         .from('vision')
-        .upsert({
-          user_id: user.id,
-          year: selectedYear,
-          ...nextVision,
-        }, {
-          onConflict: 'user_id,year'
-        });
-
+        .upsert({ user_id: user.id, year: selectedYear, ...nextVision }, { onConflict: 'user_id,year' });
       if (error) throw error;
 
       for (const mapping of VISION_YEAR_MAPPINGS) {
@@ -438,41 +256,77 @@ export const useSelfDiscovery = () => {
         if (targetFetchError) throw targetFetchError;
 
         const mergedVision1y = appendVisionReference(targetRow?.vision_1y, mapping.label, selectedYear, visionText);
-
         const { error: targetUpsertError } = await supabase
           .from('vision')
-          .upsert({
-            user_id: user.id,
-            year: targetYear,
-            vision_1y: mergedVision1y,
-          }, { onConflict: 'user_id,year' });
+          .upsert({ user_id: user.id, year: targetYear, vision_1y: mergedVision1y }, { onConflict: 'user_id,year' });
 
         if (targetUpsertError) throw targetUpsertError;
       }
+    },
+    onSuccess: () => {
+      toast({ title: 'Saved', description: 'Vision updated successfully', duration: 2000 });
+      queryClient.invalidateQueries({ queryKey: key });
+    },
+    onError: (error) => {
+      handleError("Couldn't save changes, please retry", error);
+      queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
 
-      toast({
-        title: "Saved",
-        description: "Vision updated successfully",
-        duration: 2000,
-      });
-    } catch (error) {
-      console.error('Error updating vision:', error);
-      toast({
-        title: "Error",
-        description: "Couldn't save changes, please retry",
-        variant: "destructive",
-      });
-      fetchVision();
-    } finally {
-      setSaving(false);
+  const lifeWheelData = user ? dataQuery.data?.lifeWheelData || [] : guestLifeWheelData;
+  const previousYearLifeWheel = user ? dataQuery.data?.previousYearLifeWheel || [] : [];
+  const valuesData = user ? dataQuery.data?.valuesData || [] : guestValuesData;
+  const visionData = user ? dataQuery.data?.visionData || {} : guestVisionData;
+
+  const updateLifeWheel = async (areaName: string, updates: Partial<LifeWheelData>) => {
+    if (!user) {
+      setGuestLifeWheelData((previous) =>
+        previous.map((item) => (item.area_name === areaName ? { ...item, ...updates } : item))
+      );
+      return;
     }
+    await updateLifeWheelMutation.mutateAsync({ areaName, updates });
   };
 
-  const selectedValuesCount = valuesData.filter(v => v.selected).length;
+  const updateValues = async (valueName: string, selected: boolean) => {
+    const sourceValues = user ? dataQuery.data?.valuesData || [] : valuesData;
+    const currentSelected = sourceValues.filter((v) => v.selected).length;
+    if (selected && currentSelected >= 7) {
+      toast({ title: 'Maximum reached', description: 'You can select up to 7 values only', variant: 'destructive' });
+      return;
+    }
+
+    if (!user) {
+      setGuestValuesData((previous) =>
+        previous.map((item) => (item.value_name === valueName ? { ...item, selected } : item))
+      );
+      return;
+    }
+
+    applyPatch({
+      valuesData: sourceValues.map((item) => (item.value_name === valueName ? { ...item, selected } : item)),
+    });
+
+    await updateValuesMutation.mutateAsync({ valueName, selected });
+  };
+
+  const updateVision = async (updates: Partial<VisionData>) => {
+    if (!user) {
+      setGuestVisionData((previous) => ({ ...previous, ...updates }));
+      return;
+    }
+    applyPatch({ visionData: { ...(dataQuery.data?.visionData || {}), ...updates } });
+    await updateVisionMutation.mutateAsync(updates);
+  };
+
+  const selectedValuesCount = valuesData.filter((v) => v.selected).length;
 
   return {
-    loading,
-    saving,
+    loading: user ? dataQuery.isLoading : false,
+    saving:
+      updateLifeWheelMutation.isPending ||
+      updateValuesMutation.isPending ||
+      updateVisionMutation.isPending,
     lifeWheelData,
     previousYearLifeWheel,
     valuesData,
@@ -483,6 +337,6 @@ export const useSelfDiscovery = () => {
     updateVision,
     PREDEFINED_VALUES,
     LIFE_AREAS,
-    LIFE_AREAS_BY_CATEGORY
+    LIFE_AREAS_BY_CATEGORY,
   };
 };

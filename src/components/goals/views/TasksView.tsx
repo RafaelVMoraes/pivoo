@@ -14,13 +14,11 @@ interface TasksViewProps {
 
 export const TasksView = ({ goals, isLoading: goalsLoading }: TasksViewProps) => {
   const { t } = useTranslation();
-  const { activities, checkIns, isLoading: activitiesLoading, createCheckIn, markCheckInAsNotDone, deleteCheckIn, refetch } =
+  const { activities, checkIns, isLoading: activitiesLoading, createCheckIn, markCheckInAsNotDone, deleteCheckIn } =
     useAllActivities();
   const { toast } = useToast();
 
-  const [localCompletions, setLocalCompletions] = useState<Set<string>>(new Set());
-  const [localRemovals, setLocalRemovals] = useState<Set<string>>(new Set());
-  const [localNotDone, setLocalNotDone] = useState<Set<string>>(new Set());
+  const [pendingTasks, setPendingTasks] = useState<Set<string>>(new Set());
 
   const isLoading = goalsLoading || activitiesLoading;
 
@@ -33,8 +31,8 @@ export const TasksView = ({ goals, isLoading: goalsLoading }: TasksViewProps) =>
 
   const handleToggleTask = async (task: TaskData) => {
     // If task is completed or was marked as not done, clear explicit state for this day
-    if ((task.isCompleted || task.isNotDone) && !localRemovals.has(task.id)) {
-      setLocalRemovals((prev) => new Set(prev).add(task.id));
+    if ((task.isCompleted || task.isNotDone) && !pendingTasks.has(task.id)) {
+      setPendingTasks((prev) => new Set(prev).add(task.id));
       
       try {
         await deleteCheckIn(
@@ -42,38 +40,29 @@ export const TasksView = ({ goals, isLoading: goalsLoading }: TasksViewProps) =>
           task.executionDate || new Date().toISOString()
         );
 
-        setLocalNotDone((prev) => {
-          const next = new Set(prev);
-          next.delete(task.id);
-          return next;
-        });
-
         toast({
           title: t('tasks.toast.undone.title'),
           description: t('tasks.toast.undone.description'),
         });
-
-        refetch();
       } catch (error) {
-        setLocalRemovals((prev) => {
-          const next = new Set(prev);
-          next.delete(task.id);
-          return next;
-        });
-
         toast({
           title: t('tasks.toast.error.title'),
           description: t('tasks.toast.error.description'),
           variant: 'destructive',
+        });
+      } finally {
+        setPendingTasks((prev) => {
+          const next = new Set(prev);
+          next.delete(task.id);
+          return next;
         });
       }
       return;
     }
 
     // If task is pending, mark as done
-    if (!task.isCompleted && !task.isNotDone && !localCompletions.has(task.id)) {
-      // Optimistic update
-      setLocalCompletions((prev) => new Set(prev).add(task.id));
+    if (!task.isCompleted && !task.isNotDone && !pendingTasks.has(task.id)) {
+      setPendingTasks((prev) => new Set(prev).add(task.id));
 
       try {
         await createCheckIn(
@@ -86,37 +75,24 @@ export const TasksView = ({ goals, isLoading: goalsLoading }: TasksViewProps) =>
           title: t('tasks.toast.completed.title'),
           description: t('tasks.toast.completed.description'),
         });
-
-        refetch();
       } catch (error) {
-        // Rollback optimistic update
-        setLocalCompletions((prev) => {
-          const next = new Set(prev);
-          next.delete(task.id);
-          return next;
-        });
-
         toast({
           title: t('tasks.toast.error.title'),
           description: t('tasks.toast.error.description'),
           variant: 'destructive',
+        });
+      } finally {
+        setPendingTasks((prev) => {
+          const next = new Set(prev);
+          next.delete(task.id);
+          return next;
         });
       }
     }
   };
 
   const applyLocalCompletions = (tasks: TaskData[]): TaskData[] =>
-    tasks.map((task) => {
-      const isExplicitlyRemoved = localRemovals.has(task.id);
-      const isMarkedNotDone = (task.isNotDone || localNotDone.has(task.id)) && !isExplicitlyRemoved;
-      const isCompleted = (task.isCompleted || localCompletions.has(task.id)) && !isExplicitlyRemoved && !isMarkedNotDone;
-
-      return {
-        ...task,
-        isCompleted,
-        isNotDone: isMarkedNotDone,
-      };
-    });
+    tasks.map((task) => task);
 
   const handleClearLateTasks = async () => {
     const lateTasks = applyLocalCompletions(late);
@@ -141,13 +117,6 @@ export const TasksView = ({ goals, isLoading: goalsLoading }: TasksViewProps) =>
         description: t('tasks.toast.cleared.description', { count: incompleteTasks.length }),
       });
 
-      setLocalNotDone((prev) => {
-        const next = new Set(prev);
-        incompleteTasks.forEach((task) => next.add(task.id));
-        return next;
-      });
-
-      refetch();
     } catch (error) {
       toast({
         title: t('tasks.toast.error.title'),

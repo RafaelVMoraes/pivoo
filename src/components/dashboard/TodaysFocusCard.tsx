@@ -13,9 +13,9 @@ import { ChevronDown, AlertTriangle, Zap, Target, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '@/hooks/useTranslation';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { useAllActivities } from '@/hooks/useAllActivities';
 
 
 interface TaskItem {
@@ -38,7 +38,6 @@ interface TodaysFocusCardProps {
   data: TodaysFocusData;
   isLoading: boolean;
   isGuest: boolean;
-  onRefresh?: () => void;
 }
 
 const priorityConfig = {
@@ -56,19 +55,17 @@ const priorityConfig = {
   },
 };
 
-export const TodaysFocusCard = ({ data, isLoading, isGuest, onRefresh }: TodaysFocusCardProps) => {
+export const TodaysFocusCard = ({ data, isLoading, isGuest }: TodaysFocusCardProps) => {
   const [completingTasks, setCompletingTasks] = useState<Set<string>>(new Set());
-  const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { createCheckIn } = useAllActivities();
   
 
-  // Filter out completed tasks (must be after useState declarations)
-  const activeTasks = data.tasks.filter(task => !completedTasks.has(task.activityId));
-  const hasNoTasks = activeTasks.length === 0;
+  const hasNoTasks = data.tasks.length === 0;
 
-  const [isOpen, setIsOpen] = useState(activeTasks.length > 0);
+  const [isOpen, setIsOpen] = useState(data.tasks.length > 0);
 
   const handleCompleteTask = async (task: TaskItem) => {
     if (isGuest || !user || completingTasks.has(task.activityId)) return;
@@ -76,27 +73,11 @@ export const TodaysFocusCard = ({ data, isLoading, isGuest, onRefresh }: TodaysF
     setCompletingTasks(prev => new Set(prev).add(task.activityId));
 
     try {
-      // Store date as start-of-day to ensure consistent date matching
       const todayDate = new Date();
       todayDate.setHours(12, 0, 0, 0); // Noon to avoid timezone edge cases
-      const { error } = await supabase
-        .from('check_ins')
-        .insert({
-          activity_id: task.activityId,
-          goal_id: task.goalId,
-          user_id: user.id,
-          progress_value: 'done',
-          input_type: 'checkbox',
-          date: todayDate.toISOString(),
-        });
-
-      if (error) throw error;
+      await createCheckIn(task.activityId, task.goalId, todayDate.toISOString());
       
-      setCompletedTasks(prev => new Set(prev).add(task.activityId));
       toast.success(t('dashboard.taskCompleted'));
-      
-      // Refetch activities data to update all dashboard components
-      onRefresh?.();
     } catch (error) {
       console.error('Error completing task:', error);
       toast.error(t('dashboard.taskCompletionError'));
@@ -135,7 +116,7 @@ export const TodaysFocusCard = ({ data, isLoading, isGuest, onRefresh }: TodaysF
                   {t('dashboard.todaysFocus')}
                 </CardTitle>
                 <span className="text-sm text-muted-foreground">
-                  {activeTasks.length} {t('dashboard.tasks')}
+                  {data.tasks.length} {t('dashboard.tasks')}
                 </span>
                 {data.overdueCount > 0 && (
                   <Badge variant="destructive" className="ml-2">
@@ -164,7 +145,7 @@ export const TodaysFocusCard = ({ data, isLoading, isGuest, onRefresh }: TodaysF
             ) : (
               <>
                 {/* Task List - Show up to 5 */}
-                {activeTasks.slice(0, 5).map((task) => {
+                {data.tasks.slice(0, 5).map((task) => {
                   const isCompleting = completingTasks.has(task.activityId);
                   
                   return (
