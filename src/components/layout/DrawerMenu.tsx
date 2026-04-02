@@ -9,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
-  LifeBuoy,
   Settings,
   LogOut,
   UserPlus,
@@ -55,16 +54,16 @@ export const DrawerMenu = ({ open, onClose }: DrawerMenuProps) => {
           </SheetTitle>
         </SheetHeader>
 
-        {/* Main navigation */}
+        {/* Secondary navigation */}
         <div className="mt-8 space-y-2 text-gray-900 dark:text-gray-100">
           <Button
             variant="ghost"
             className="w-full justify-start h-12 text-gray-900 dark:text-gray-100
                        hover:bg-gray-100 dark:hover:bg-gray-800"
-            onClick={() => handleNavigation("/self-discovery")}
+            onClick={() => handleNavigation("/ai-chatbot?mode=assistant_quick")}
           >
-            <LifeBuoy className="mr-3 h-5 w-5" />
-            {t("nav.selfDiscovery")}
+            <BrainCircuit className="mr-3 h-5 w-5" />
+            {t('nav.aiAssistantQuick')}
           </Button>
 
           <Button
@@ -75,16 +74,6 @@ export const DrawerMenu = ({ open, onClose }: DrawerMenuProps) => {
           >
             <BrainCircuit className="mr-3 h-5 w-5" />
             {t('nav.aiAnalysisModules')}
-          </Button>
-
-          <Button
-            variant="ghost"
-            className="w-full justify-start h-12 text-gray-900 dark:text-gray-100
-                       hover:bg-gray-100 dark:hover:bg-gray-800"
-            onClick={() => handleNavigation("/ai-chatbot?mode=assistant_quick")}
-          >
-            <BrainCircuit className="mr-3 h-5 w-5" />
-            {t('nav.aiAssistantQuick')}
           </Button>
 
           <Button
