@@ -1,4 +1,4 @@
-const SW_VERSION = 'v1.0.0';
+const SW_VERSION = 'v1.1.0';
 const APP_SHELL_CACHE = `pivoo-app-shell-${SW_VERSION}`;
 const STATIC_CACHE = `pivoo-static-${SW_VERSION}`;
 const RUNTIME_CACHE = `pivoo-runtime-${SW_VERSION}`;
@@ -8,7 +8,10 @@ const APP_SHELL_ASSETS = ['/', '/index.html', '/manifest.webmanifest', OFFLINE_U
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(APP_SHELL_CACHE).then((cache) => cache.addAll(APP_SHELL_ASSETS)).then(() => self.skipWaiting())
+    caches
+      .open(APP_SHELL_CACHE)
+      .then((cache) => cache.addAll(APP_SHELL_ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -88,4 +91,52 @@ self.addEventListener('fetch', (event) => {
       })
     );
   }
+});
+
+self.addEventListener('push', (event) => {
+  const payload = event.data ? event.data.json() : {};
+  const title = payload.title || 'Pivoo';
+  const body = payload.body || 'You have a new update';
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/favicon.ico',
+      badge: '/favicon.ico',
+      data: payload.data || {},
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const type = event.notification.data?.type;
+  const pathByType = {
+    morning: '/dashboard',
+    midday_nudge: '/goals',
+    late_day_nudge: '/goals',
+    evening: '/dashboard',
+    night: '/dashboard',
+    ai_reminder: '/ai-chatbot',
+    self_discovery: '/self-discovery',
+  };
+  const targetPath = pathByType[type] || '/dashboard';
+  const targetUrl = new URL(targetPath, self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client && client.url === targetUrl) {
+          return client.focus();
+        }
+      }
+
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetPath);
+      }
+
+      return undefined;
+    })
+  );
 });
