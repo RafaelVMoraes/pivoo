@@ -87,10 +87,12 @@ export type Database = {
           activity_id: string | null
           created_at: string
           date: string
+          execution_status: string
           goal_id: string
           id: string
           input_type: string | null
           progress_value: string
+          score_value: number | null
           updated_at: string
           user_id: string
         }
@@ -98,10 +100,12 @@ export type Database = {
           activity_id?: string | null
           created_at?: string
           date?: string
+          execution_status?: string
           goal_id: string
           id?: string
           input_type?: string | null
           progress_value: string
+          score_value?: number | null
           updated_at?: string
           user_id: string
         }
@@ -109,10 +113,12 @@ export type Database = {
           activity_id?: string | null
           created_at?: string
           date?: string
+          execution_status?: string
           goal_id?: string
           id?: string
           input_type?: string | null
           progress_value?: string
+          score_value?: number | null
           updated_at?: string
           user_id?: string
         }

@@ -6,6 +6,7 @@ import { useSelfDiscovery } from './useSelfDiscovery';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAllActivities, ActivityWithGoal } from './useAllActivities';
 import { isActivityCompletedForWindow, isActivityCompletedForDate, isActivityLate, getActivityTimePeriod } from '@/lib/taskUtils';
+import { deriveScoreValue, isCheckInDone } from '@/lib/checkInStatus';
 
 interface WeeklyHabitData {
   week: string;
@@ -351,10 +352,7 @@ export const useDashboardStats = () => {
         const checkInDate = new Date(c.date);
         return checkInDate >= weekStart && 
                checkInDate <= now &&
-               (c.progress_value === 'done' || 
-                c.progress_value === 'no_evolution' ||
-                c.progress_value === 'some_evolution' ||
-                c.progress_value === 'good_evolution');
+               isCheckInDone(c);
       });
 
       // For daily/weekly, count unique days
@@ -400,10 +398,7 @@ export const useDashboardStats = () => {
         const checkInDate = new Date(c.date);
         return checkInDate >= monthStart && 
                checkInDate <= now &&
-               (c.progress_value === 'done' || 
-                c.progress_value === 'no_evolution' ||
-                c.progress_value === 'some_evolution' ||
-                c.progress_value === 'good_evolution');
+               isCheckInDone(c);
       });
 
       // For daily/weekly, count unique days
@@ -424,10 +419,7 @@ export const useDashboardStats = () => {
       const checkInDate = new Date(c.date);
       return checkInDate >= monthStart && 
              checkInDate <= now &&
-             (c.progress_value === 'done' || 
-              c.progress_value === 'no_evolution' ||
-              c.progress_value === 'some_evolution' ||
-              c.progress_value === 'good_evolution');
+             isCheckInDone(c);
     });
 
     // Calculate streaks
@@ -728,10 +720,7 @@ export const useDashboardStats = () => {
         // Check if check-in is on this day
         if (checkInDate < dayStart || checkInDate > dayEnd) return false;
         // Only count completed check-ins
-        return c.progress_value === 'done' || 
-               c.progress_value === 'no_evolution' ||
-               c.progress_value === 'some_evolution' ||
-               c.progress_value === 'good_evolution';
+        return isCheckInDone(c);
       });
 
       // Group completed check-ins by time slot
@@ -814,9 +803,9 @@ export const useDashboardStats = () => {
       let completionRate = 0;
       if (processGoals.length > 0) {
         const completedHabits = weekCheckIns.filter(checkIn => 
-          checkIn.progress_value === 'true' || 
-          (checkIn.input_type === 'percentage' && parseInt(checkIn.progress_value) > 50) ||
-          (checkIn.input_type === 'numeric' && parseInt(checkIn.progress_value) > 0)
+          isCheckInDone(checkIn) ||
+          (checkIn.input_type === 'percentage' && Number(checkIn.progress_value) > 50) ||
+          (checkIn.input_type === 'numeric' && Number(checkIn.progress_value) > 0)
         ).length;
         
         completionRate = Math.round((completedHabits / (processGoals.length * 7)) * 100);
@@ -851,11 +840,11 @@ export const useDashboardStats = () => {
       if (monthCheckIns.length > 0) {
         const totalProgress = monthCheckIns.reduce((sum, checkIn) => {
           if (checkIn.input_type === 'percentage') {
-            return sum + parseInt(checkIn.progress_value);
+            return sum + (deriveScoreValue(checkIn) ?? 0);
           } else if (checkIn.input_type === 'checkbox') {
-            return sum + (checkIn.progress_value === 'true' ? 100 : 0);
+            return sum + (isCheckInDone(checkIn) ? 100 : 0);
           } else if (checkIn.input_type === 'numeric') {
-            return sum + Math.min(100, parseInt(checkIn.progress_value) * 10);
+            return sum + Math.min(100, (deriveScoreValue(checkIn) ?? 0) * 10);
           }
           return sum;
         }, 0);

@@ -5,6 +5,7 @@ import { useYear } from '@/contexts/YearContext';
 import { Activity } from './useActivities';
 import { Goal } from './useGoals';
 import { queryKeys } from '@/lib/queryKeys';
+import { EXECUTION_STATUS, ExecutionStatus, isTrackedExecutionStatus } from '@/lib/checkInStatus';
 
 export interface ActivityWithGoal extends Activity {
   goal: Pick<Goal, 'id' | 'title' | 'priority' | 'start_date'>;
@@ -15,6 +16,8 @@ export interface CheckInRecord {
   activity_id: string;
   date: string;
   progress_value: string;
+  execution_status?: ExecutionStatus | null;
+  score_value?: number | null;
   created_at?: string;
 }
 
@@ -23,8 +26,6 @@ interface AllActivitiesData {
   checkIns: CheckInRecord[];
 }
 
-const COMPLETED_PROGRESS_VALUES = ['done', 'no_evolution', 'some_evolution', 'good_evolution'];
-const TRACKED_TASK_PROGRESS_VALUES = [...COMPLETED_PROGRESS_VALUES, 'not_done'];
 
 const toCanonicalExecutionDateISO = (executionDateISO?: string) => {
   if (!executionDateISO) return new Date().toISOString();
@@ -106,7 +107,7 @@ export const useAllActivities = () => {
 
       const { data: checkInsData, error: checkInsError } = await supabase
         .from('check_ins')
-        .select('id, activity_id, date, progress_value, created_at')
+        .select('id, activity_id, date, progress_value, execution_status, score_value, created_at')
         .eq('user_id', user!.id)
         .gte('date', thirtyOneDaysAgo.toISOString())
         .not('activity_id', 'is', null);
@@ -138,7 +139,7 @@ export const useAllActivities = () => {
       .delete()
       .eq('activity_id', activityId)
       .eq('user_id', user!.id)
-      .in('progress_value', TRACKED_TASK_PROGRESS_VALUES)
+      .in('execution_status', [EXECUTION_STATUS.DONE, EXECUTION_STATUS.NOT_DONE])
       .gte('date', dayStart.toISOString())
       .lte('date', dayEnd.toISOString());
 
@@ -148,7 +149,7 @@ export const useAllActivities = () => {
       checkIns.filter((ci) => {
         if (ci.activity_id !== activityId) return true;
         const ciDate = new Date(ci.date);
-        const isTracked = TRACKED_TASK_PROGRESS_VALUES.includes(ci.progress_value);
+        const isTracked = isTrackedExecutionStatus(ci);
         return ciDate < dayStart || ciDate > dayEnd || !isTracked;
       })
     );
@@ -159,12 +160,12 @@ export const useAllActivities = () => {
       activityId,
       goalId,
       executionDateISO,
-      progressValue,
+      executionStatus,
     }: {
       activityId: string;
       goalId: string;
       executionDateISO?: string;
-      progressValue: 'done' | 'not_done';
+      executionStatus: ExecutionStatus;
     }) => {
       if (isGuest || !user) return null;
       const canonicalDate = toCanonicalExecutionDateISO(executionDateISO);
@@ -177,10 +178,11 @@ export const useAllActivities = () => {
           goal_id: goalId,
           user_id: user.id,
           date: canonicalDate,
-          progress_value: progressValue,
+          progress_value: executionStatus,
+          execution_status: executionStatus,
           input_type: 'checkbox',
         })
-        .select('id, activity_id, date, progress_value, created_at')
+        .select('id, activity_id, date, progress_value, execution_status, score_value, created_at')
         .single();
 
       if (error) throw error;
@@ -215,9 +217,9 @@ export const useAllActivities = () => {
     checkIns: isGuest || !user ? [] : dataQuery.data?.checkIns || [],
     isLoading: dataQuery.isLoading,
     createCheckIn: (activityId: string, goalId: string, executionDateISO?: string) =>
-      createMutation.mutateAsync({ activityId, goalId, executionDateISO, progressValue: 'done' }),
+      createMutation.mutateAsync({ activityId, goalId, executionDateISO, executionStatus: EXECUTION_STATUS.DONE }),
     markCheckInAsNotDone: (activityId: string, goalId: string, executionDateISO: string) =>
-      createMutation.mutateAsync({ activityId, goalId, executionDateISO, progressValue: 'not_done' }),
+      createMutation.mutateAsync({ activityId, goalId, executionDateISO, executionStatus: EXECUTION_STATUS.NOT_DONE }),
     deleteCheckIn: (activityId: string, executionDateISO: string) =>
       deleteMutation.mutateAsync({ activityId, executionDateISO }),
     refetch: dataQuery.refetch,
