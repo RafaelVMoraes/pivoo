@@ -11,6 +11,7 @@ import { TutorialProvider, TutorialOverlay, TutorialCenterDialog } from "@/tutor
 import { PWAStatus } from "@/components/pwa/PWAStatus";
 import { useAuth } from "@/contexts/AuthContext";
 import { handlePushSubscriptionIfEligible } from "@/notifications/subscribeToPush";
+import { useInitialOnboarding } from "@/hooks/useInitialOnboarding";
 
 const Intro = lazy(() => import("./pages/Intro"));
 const Auth = lazy(() => import("./pages/Auth"));
@@ -22,6 +23,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Journaling = lazy(() => import("./pages/Journaling"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const InitialOnboarding = lazy(() => import("./pages/InitialOnboarding"));
 
 const queryClient = new QueryClient();
 
@@ -33,6 +35,39 @@ const NotificationBootstrap = () => {
   }, [user?.id]);
 
   return null;
+};
+
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isGuest, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="p-4 text-center text-sm text-muted-foreground">Loading…</div>;
+  }
+
+  if (!user && !isGuest) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+const PostLoginRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isGuest, isLoading: authLoading } = useAuth();
+  const { isLoading, shouldShowOnboarding } = useInitialOnboarding();
+
+  if (authLoading || isLoading) {
+    return <div className="p-4 text-center text-sm text-muted-foreground">Loading…</div>;
+  }
+
+  if (!user && !isGuest) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (!isGuest && shouldShowOnboarding) {
+    return <Navigate to="/onboarding-inicial" replace />;
+  }
+
+  return <>{children}</>;
 };
 
 const App = () => (
@@ -51,51 +86,73 @@ const App = () => (
                   <Route path="/" element={<Auth />} />
                   <Route path="/auth" element={<Auth />} />
                   <Route
+                    path="/onboarding-inicial"
+                    element={
+                      <ProtectedRoute>
+                        <AppLayout>
+                          <InitialOnboarding />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/dashboard"
                     element={
-                      <AppLayout>
-                        <Dashboard />
-                      </AppLayout>
+                      <PostLoginRoute>
+                        <AppLayout>
+                          <Dashboard />
+                        </AppLayout>
+                      </PostLoginRoute>
                     }
                   />
                   <Route
                     path="/goals"
                     element={
-                      <AppLayout>
-                        <Goals />
-                      </AppLayout>
+                      <PostLoginRoute>
+                        <AppLayout>
+                          <Goals />
+                        </AppLayout>
+                      </PostLoginRoute>
                     }
                   />
                   <Route
                     path="/self-discovery"
                     element={
-                      <AppLayout>
-                        <SelfDiscovery />
-                      </AppLayout>
+                      <PostLoginRoute>
+                        <AppLayout>
+                          <SelfDiscovery />
+                        </AppLayout>
+                      </PostLoginRoute>
                     }
                   />
                   <Route
                     path="/ai-chatbot"
                     element={
-                      <AppLayout>
-                        <AIChatbot />
-                      </AppLayout>
+                      <PostLoginRoute>
+                        <AppLayout>
+                          <AIChatbot />
+                        </AppLayout>
+                      </PostLoginRoute>
                     }
                   />
                   <Route
                     path="/journaling"
                     element={
-                      <AppLayout>
-                        <Journaling />
-                      </AppLayout>
+                      <PostLoginRoute>
+                        <AppLayout>
+                          <Journaling />
+                        </AppLayout>
+                      </PostLoginRoute>
                     }
                   />
                   <Route
                     path="/settings"
                     element={
-                      <AppLayout>
-                        <Settings />
-                      </AppLayout>
+                      <PostLoginRoute>
+                        <AppLayout>
+                          <Settings />
+                        </AppLayout>
+                      </PostLoginRoute>
                     }
                   />
                   <Route path="/reset-password" element={<ResetPassword />} />

@@ -239,7 +239,7 @@ export const Auth = () => {
   const [formData, setFormData] = useState({ email: '', password: '', name: '', confirmPassword: '' });
 
   useEffect(() => {
-    if (user) navigate('/dashboard');
+    if (user) navigate('/onboarding-inicial');
   }, [user, navigate]);
 
   useEffect(() => {
@@ -293,7 +293,7 @@ export const Auth = () => {
       if (error) {
         toast({ title: t('auth.signInFailed'), description: error.message, variant: 'destructive' });
       } else {
-        navigate('/dashboard');
+        navigate('/onboarding-inicial');
       }
     } catch {
       toast({ title: t('auth.signInFailed'), description: t('auth.unexpectedError'), variant: 'destructive' });
@@ -317,7 +317,7 @@ export const Auth = () => {
         toast({ title, description: desc, variant: 'destructive' });
       } else {
         toast({ title: t('auth.accountCreated'), description: t('auth.accountCreatedDesc') });
-        navigate('/dashboard');
+        navigate('/onboarding-inicial');
       }
     } catch {
       toast({ title: t('auth.signUpFailed'), description: t('auth.unexpectedError'), variant: 'destructive' });
