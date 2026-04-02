@@ -1,12 +1,15 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { startOfWeek, format as dateFnsFormat } from 'date-fns';
+import { useMemo } from 'react';
 import { useGoals, Goal } from './useGoals';
 import { useCheckIns } from './useCheckIns';
 import { useSelfDiscovery } from './useSelfDiscovery';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAllActivities, ActivityWithGoal } from './useAllActivities';
-import { isActivityCompletedForWindow, isActivityCompletedForDate, isActivityLate, getActivityTimePeriod } from '@/lib/taskUtils';
+import { isActivityCompletedForWindow } from '@/lib/taskUtils';
+import { useAllActivities } from './useAllActivities';
 import { deriveScoreValue, isCheckInDone } from '@/lib/checkInStatus';
+import { useYearProgress } from './dashboard/useYearProgress';
+import { useTodaysFocus } from './dashboard/useTodaysFocus';
+import { useWeeklyOverview } from './dashboard/useWeeklyOverview';
+import { useHabitsConsistency } from './dashboard/useHabitsConsistency';
 
 interface WeeklyHabitData {
   week: string;
@@ -35,12 +38,11 @@ export interface LifeSnapshotData {
   currentStreak: number;
 }
 
-export interface TodaysFocusData {
-  task: ActivityWithGoal | null;
-  relatedValue: string | null;
-  overdueCount: number;
-  todayTasksCount: number;
-}
+export type HabitsData = ReturnType<typeof useHabitsConsistency>;
+export type YearProgressData = ReturnType<typeof useYearProgress>;
+export type TodaysFocusData = import('./dashboard/useTodaysFocus').TodaysFocusData;
+export type TodaysFocusCardData = import('./dashboard/useTodaysFocus').TodaysFocusCardData;
+export type WeeklyOverviewData = import('./dashboard/useWeeklyOverview').WeeklyOverviewData;
 
 export interface GoalWithProgress extends Goal {
   progress: number;
@@ -48,17 +50,6 @@ export interface GoalWithProgress extends Goal {
   completedActivities: number;
   isOverdue: boolean;
   isStalled: boolean;
-}
-
-export interface HabitsData {
-  weeklyCompletionRate: number;
-  monthlyCompletionRate: number;
-  currentStreak: number;
-  longestStreak: number;
-  consistencyTrend: 'improving' | 'declining' | 'stable';
-  weekdayAverage: number;
-  weekendAverage: number;
-  insightText: string;
 }
 
 export interface SelfDiscoveryPanelData {
@@ -70,14 +61,6 @@ export interface SelfDiscoveryPanelData {
 }
 
 // New interfaces for redesigned dashboard
-export interface YearProgressData {
-  tasksCompleted: number;
-  totalTasks: number;
-  goalsCompleted: number;
-  totalGoals: number;
-  yearProgress: number;
-}
-
 export interface SelfDiscoveryLinearData {
   wordOfYear: string | null;
   phraseOfYear: string | null;
@@ -86,35 +69,6 @@ export interface SelfDiscoveryLinearData {
   focusAreas: string[];
   selectedValues: string[];
   hasData: boolean;
-}
-
-export interface TodaysFocusCardData {
-  tasks: Array<{
-    id: string;
-    activityId: string;
-    name: string;
-    priority: 'gold' | 'silver' | 'bronze';
-    goalTitle: string;
-    goalId: string;
-    isOverdue: boolean;
-  }>;
-  overdueCount: number;
-  totalTodayCount: number;
-}
-
-export interface WeeklyOverviewData {
-  days: Record<string, {
-    morning: number;
-    afternoon: number;
-    night: number;
-    wholeDay: number;
-    morningCompleted: number;
-    afternoonCompleted: number;
-    nightCompleted: number;
-    wholeDayCompleted: number;
-  }>;
-  weeklyCompletionRate: number;
-  monthlyCompletionRate: number;
 }
 
 export interface GoalsHabitsCardData {
@@ -129,7 +83,7 @@ export interface GoalsHabitsCardData {
 }
 
 export const useDashboardStats = () => {
-  const { user, isGuest } = useAuth();
+  const { isGuest } = useAuth();
   const { goals, isLoading: goalsLoading } = useGoals();
   const { checkIns, isLoading: checkInsLoading } = useCheckIns();
   const { lifeWheelData, valuesData, visionData, loading: lifeWheelLoading } = useSelfDiscovery();
@@ -207,50 +161,11 @@ export const useDashboardStats = () => {
     };
   }, [goals, lifeWheelData, checkIns]);
 
-  // Calculate today's focus data
-  const todaysFocusData = useMemo((): TodaysFocusData => {
-    const now = new Date();
-    const hour = now.getHours();
-    const currentTimeOfDay = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'night';
-
-    // Filter activities for today
-    const todayActivities = activities.filter(activity => {
-      const period = getActivityTimePeriod(activity, now);
-      if (period === 'today') {
-        // Check if not already completed
-        return !isActivityCompletedForWindow(activity, activityCheckIns, now);
-      }
-      return false;
-    });
-
-    // Sort by priority and time of day relevance
-    const priorityOrder = { gold: 0, silver: 1, bronze: 2 };
-    const timeRelevance = (a: ActivityWithGoal) => {
-      if (a.time_of_day === currentTimeOfDay) return 0;
-      return 1;
-    };
-
-    const sortedActivities = [...todayActivities].sort((a, b) => {
-      const timeDiff = timeRelevance(a) - timeRelevance(b);
-      if (timeDiff !== 0) return timeDiff;
-      return priorityOrder[a.goal.priority] - priorityOrder[b.goal.priority];
-    });
-
-    // Count overdue
-    const overdueCount = activities.filter(a => isActivityLate(a, activityCheckIns, now)).length;
-
-    // Get related value for the focus task
-    const focusTask = sortedActivities[0] || null;
-    const selectedValues = valuesData.filter(v => v.selected).map(v => v.value_name);
-    const relatedValue = selectedValues.length > 0 ? selectedValues[0] : null;
-
-    return {
-      task: focusTask,
-      relatedValue,
-      overdueCount,
-      todayTasksCount: todayActivities.length + 1,
-    };
-  }, [activities, activityCheckIns, valuesData]);
+  const { todaysFocusData, todaysFocusCardData } = useTodaysFocus({
+    activities,
+    checkIns: activityCheckIns,
+    valuesData,
+  });
 
   // Calculate goals with progress
   const goalsWithProgress = useMemo((): GoalWithProgress[] => {
@@ -299,209 +214,10 @@ export const useDashboardStats = () => {
       });
   }, [goals, activities, activityCheckIns]);
 
-  // Calculate habits consistency data
-  const habitsData = useMemo((): HabitsData => {
-    const now = new Date();
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    weekStart.setHours(0, 0, 0, 0);
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    monthStart.setHours(0, 0, 0, 0);
-    const dailyActivities = activities.filter(a => a.status === 'active' && a.frequency_type === 'daily');
-
-    // Calculate weekly completion rate - count expected vs actual for the current week
-    let weeklyExpected = 0;
-    let weeklyCompleted = 0;
-
-    activities.forEach(activity => {
-      if (activity.status !== 'active') return;
-
-      // Count expected executions for this week
-      if (activity.frequency_type === 'daily') {
-        const daysInWeek = Math.min(7, Math.floor((now.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-        weeklyExpected += daysInWeek;
-      } else if (activity.frequency_type === 'weekly') {
-        // Count scheduled days in this week that have passed
-        const daysInWeek = Math.floor((now.getTime() - weekStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        const scheduledDays = activity.days_of_week || [];
-        const dayNamesLong = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const dayNamesShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        let scheduledThisWeek = 0;
-        const scheduledLower = scheduledDays.map(d => d.toLowerCase());
-        for (let i = 0; i < daysInWeek; i++) {
-          const day = new Date(weekStart);
-          day.setDate(weekStart.getDate() + i);
-          const idx = day.getDay();
-          if (scheduledLower.includes(dayNamesLong[idx].toLowerCase()) || scheduledLower.includes(dayNamesShort[idx].toLowerCase())) {
-            scheduledThisWeek++;
-          }
-        }
-        weeklyExpected += scheduledThisWeek;
-      } else if (activity.frequency_type === 'monthly') {
-        // Check if the scheduled day falls in this week and has passed
-        if (activity.day_of_month) {
-          const scheduledDate = new Date(now.getFullYear(), now.getMonth(), activity.day_of_month);
-          if (scheduledDate >= weekStart && scheduledDate <= now) {
-            weeklyExpected += 1;
-          }
-        }
-      }
-
-      // Count completed check-ins for this week
-      const weekCheckIns = activityCheckIns.filter(c => {
-        if (c.activity_id !== activity.id) return false;
-        const checkInDate = new Date(c.date);
-        return checkInDate >= weekStart && 
-               checkInDate <= now &&
-               isCheckInDone(c);
-      });
-
-      // For daily/weekly, count unique days
-      if (activity.frequency_type === 'daily' || activity.frequency_type === 'weekly') {
-        const uniqueDays = new Set(weekCheckIns.map(ci => new Date(ci.date).toISOString().split('T')[0]));
-        weeklyCompleted += uniqueDays.size;
-      } else if (activity.frequency_type === 'monthly') {
-        weeklyCompleted += weekCheckIns.length > 0 ? 1 : 0;
-      }
-    });
-
-    const weeklyCompletionRate = weeklyExpected > 0 
-      ? Math.round((weeklyCompleted / weeklyExpected) * 100)
-      : 0;
-
-    // Calculate monthly completion rate - count expected vs actual for the current month
-    let monthlyExpected = 0;
-    let monthlyCompleted = 0;
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const daysPassed = now.getDate();
-
-    activities.forEach(activity => {
-      if (activity.status !== 'active') return;
-
-      // Count expected executions for this month
-      if (activity.frequency_type === 'daily') {
-        monthlyExpected += daysPassed;
-      } else if (activity.frequency_type === 'weekly') {
-        // Count scheduled days that have passed this month
-        const weeksElapsed = Math.ceil(daysPassed / 7);
-        const daysPerWeek = activity.days_of_week?.length || 1;
-        monthlyExpected += weeksElapsed * daysPerWeek;
-      } else if (activity.frequency_type === 'monthly') {
-        // If the scheduled day has passed, expect 1 completion
-        if (activity.day_of_month && activity.day_of_month <= daysPassed) {
-          monthlyExpected += 1;
-        }
-      }
-
-      // Count completed check-ins for this month
-      const monthCheckIns = activityCheckIns.filter(c => {
-        if (c.activity_id !== activity.id) return false;
-        const checkInDate = new Date(c.date);
-        return checkInDate >= monthStart && 
-               checkInDate <= now &&
-               isCheckInDone(c);
-      });
-
-      // For daily/weekly, count unique days
-      if (activity.frequency_type === 'daily' || activity.frequency_type === 'weekly') {
-        const uniqueDays = new Set(monthCheckIns.map(ci => new Date(ci.date).toISOString().split('T')[0]));
-        monthlyCompleted += uniqueDays.size;
-      } else if (activity.frequency_type === 'monthly') {
-        monthlyCompleted += monthCheckIns.length > 0 ? 1 : 0;
-      }
-    });
-
-    const monthlyCompletionRate = monthlyExpected > 0 
-      ? Math.round((monthlyCompleted / monthlyExpected) * 100)
-      : 0;
-
-    // Get monthly check-ins for streak and analysis
-    const monthlyCheckIns = activityCheckIns.filter(c => {
-      const checkInDate = new Date(c.date);
-      return checkInDate >= monthStart && 
-             checkInDate <= now &&
-             isCheckInDone(c);
-    });
-
-    // Calculate streaks
-    let currentStreak = 0;
-    let longestStreak = 0;
-    let tempStreak = 0;
-
-    if (activityCheckIns.length > 0) {
-      const sortedCheckIns = [...activityCheckIns].sort((a, b) => 
-        new Date(a.date).getTime() - new Date(b.date).getTime()
-      );
-      
-      let lastDate: Date | null = null;
-      for (const checkIn of sortedCheckIns) {
-        const checkInDate = new Date(checkIn.date);
-        checkInDate.setHours(0, 0, 0, 0);
-
-        if (!lastDate || checkInDate.getTime() - lastDate.getTime() === 86400000) {
-          tempStreak++;
-          longestStreak = Math.max(longestStreak, tempStreak);
-        } else if (checkInDate.getTime() - lastDate.getTime() > 86400000) {
-          tempStreak = 1;
-        }
-        lastDate = checkInDate;
-      }
-      currentStreak = tempStreak;
-    }
-
-    // Weekday vs Weekend analysis
-    const weekdayCheckIns = monthlyCheckIns.filter(c => {
-      const day = new Date(c.date).getDay();
-      return day !== 0 && day !== 6;
-    });
-    const weekendCheckIns = monthlyCheckIns.filter(c => {
-      const day = new Date(c.date).getDay();
-      return day === 0 || day === 6;
-    });
-
-    const weekdayAverage = dailyActivities.length > 0 
-      ? Math.round((weekdayCheckIns.length / (dailyActivities.length * 22)) * 100) // ~22 weekdays
-      : 0;
-    const weekendAverage = dailyActivities.length > 0 
-      ? Math.round((weekendCheckIns.length / (dailyActivities.length * 8)) * 100) // ~8 weekend days
-      : 0;
-
-    // Determine trend
-    const firstHalfCheckIns = monthlyCheckIns.filter(c => new Date(c.date) < new Date(now.getTime() - 15 * 86400000));
-    const secondHalfCheckIns = monthlyCheckIns.filter(c => new Date(c.date) >= new Date(now.getTime() - 15 * 86400000));
-    let consistencyTrend: 'improving' | 'declining' | 'stable' = 'stable';
-    if (secondHalfCheckIns.length > firstHalfCheckIns.length * 1.2) {
-      consistencyTrend = 'improving';
-    } else if (secondHalfCheckIns.length < firstHalfCheckIns.length * 0.8) {
-      consistencyTrend = 'declining';
-    }
-
-    // Generate insight
-    let insightText = "Start building habits by adding activities to your goals.";
-    if (dailyActivities.length > 0) {
-      if (weekendAverage < weekdayAverage * 0.6) {
-        insightText = "Your weekday consistency is strong, but weekends could use more attention.";
-      } else if (consistencyTrend === 'improving') {
-        insightText = `Great momentum! Your consistency has improved over the past 2 weeks.`;
-      } else if (consistencyTrend === 'declining') {
-        insightText = "Your routine needs a boost. Try starting with just one habit today.";
-      } else if (currentStreak >= 7) {
-        insightText = `Amazing! You're on a ${currentStreak}-day streak. Keep it going!`;
-      } else {
-        insightText = `You're completing ${weeklyCompletionRate}% of your daily habits. Small improvements compound!`;
-      }
-    }
-
-    return {
-      weeklyCompletionRate: Math.min(100, weeklyCompletionRate),
-      monthlyCompletionRate: Math.min(100, monthlyCompletionRate),
-      currentStreak,
-      longestStreak,
-      consistencyTrend,
-      weekdayAverage: Math.min(100, weekdayAverage),
-      weekendAverage: Math.min(100, weekendAverage),
-      insightText,
-    };
-  }, [activities, activityCheckIns]);
+  const habitsData = useHabitsConsistency({
+    activities,
+    checkIns: activityCheckIns,
+  });
 
   // Self-discovery panel data
   const selfDiscoveryPanelData = useMemo((): SelfDiscoveryPanelData => {
@@ -524,51 +240,11 @@ export const useDashboardStats = () => {
     };
   }, [valuesData, lifeWheelData, visionData]);
 
-  // NEW: Year Progress Data
-  const yearProgressData = useMemo((): YearProgressData => {
-    const now = new Date();
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    const endOfYear = new Date(now.getFullYear(), 11, 31);
-    const yearProgress = Math.round(((now.getTime() - startOfYear.getTime()) / (endOfYear.getTime() - startOfYear.getTime())) * 100);
-
-    // Tasks completed in the year (unique check-ins)
-    const yearCheckIns = activityCheckIns.filter(c => new Date(c.date).getFullYear() === now.getFullYear());
-    const tasksCompleted = yearCheckIns.length;
-    
-    // Calculate total expected tasks based on each activity's frequency since its creation or year start
-    let totalTasks = 0;
-    
-    activities.forEach(activity => {
-      const createdAt = new Date(activity.created_at);
-      const activityStart = createdAt.getFullYear() === now.getFullYear() ? createdAt : startOfYear;
-      const daysSinceStart = Math.floor((now.getTime() - activityStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      
-      if (activity.frequency_type === 'daily') {
-        totalTasks += daysSinceStart;
-      } else if (activity.frequency_type === 'weekly') {
-        // Count based on days_of_week array length or default to 1 per week
-        const daysPerWeek = activity.days_of_week?.length || 1;
-        totalTasks += Math.ceil(daysSinceStart / 7) * daysPerWeek;
-      } else if (activity.frequency_type === 'monthly') {
-        // Count months since start
-        const monthsSinceStart = (now.getFullYear() - activityStart.getFullYear()) * 12 + 
-                                 (now.getMonth() - activityStart.getMonth()) + 1;
-        totalTasks += monthsSinceStart;
-      }
-    });
-
-    // Goals
-    const completedGoals = goals.filter(g => g.status === 'completed').length;
-    const totalGoals = goals.length;
-
-    return {
-      tasksCompleted,
-      totalTasks: Math.max(1, totalTasks),
-      goalsCompleted: completedGoals,
-      totalGoals,
-      yearProgress,
-    };
-  }, [activities, activityCheckIns, goals]);
+  const yearProgressData = useYearProgress({
+    activities,
+    checkIns: activityCheckIns,
+    goals,
+  });
 
   // NEW: Self-Discovery Linear Data
   const selfDiscoveryLinearData = useMemo((): SelfDiscoveryLinearData => {
@@ -594,167 +270,13 @@ export const useDashboardStats = () => {
     };
   }, [lifeWheelData, visionData, valuesData]);
 
-  // NEW: Today's Focus Card Data
-  const todaysFocusCardData = useMemo((): TodaysFocusCardData => {
-    const now = new Date();
-    
-    // Get today's tasks and overdue tasks
-    const todayTasks = activities.filter(activity => {
-      const period = getActivityTimePeriod(activity, now);
-      return period === 'today' && !isActivityCompletedForDate(activity, activityCheckIns, now);
-    });
-
-    const overdueTasks = activities.filter(activity => isActivityLate(activity, activityCheckIns, now));
-
-    const allTasks = [...overdueTasks, ...todayTasks];
-    const uniqueTasks = allTasks.filter((task, index, self) => 
-      index === self.findIndex(t => t.id === task.id)
-    );
-
-    const tasks = uniqueTasks.map(activity => ({
-      id: `${activity.id}-${now.toDateString()}`,
-      activityId: activity.id,
-      name: activity.title,
-      priority: activity.goal.priority as 'gold' | 'silver' | 'bronze',
-      goalTitle: activity.goal.title,
-      goalId: activity.goal_id,
-      isOverdue: isActivityLate(activity, activityCheckIns, now),
-    }));
-
-    // Sort: overdue first, then by priority
-    const priorityOrder = { gold: 0, silver: 1, bronze: 2 };
-    tasks.sort((a, b) => {
-      if (a.isOverdue && !b.isOverdue) return -1;
-      if (!a.isOverdue && b.isOverdue) return 1;
-      return priorityOrder[a.priority] - priorityOrder[b.priority];
-    });
-
-    return {
-      tasks,
-      overdueCount: overdueTasks.length,
-      totalTodayCount: todayTasks.length,
-    };
-  }, [activities, activityCheckIns]);
-
   // NEW: Weekly Overview Data
-  const weeklyOverviewData = useMemo((): WeeklyOverviewData => {
-    const now = new Date();
-    const weekStartDate = startOfWeek(now, { weekStartsOn: 1 });
-    weekStartDate.setHours(0, 0, 0, 0);
-
-    const days: WeeklyOverviewData['days'] = {};
-
-    // Day name mapping for matching with days_of_week
-    const dayNameMap: Record<number, string> = {
-      0: 'sunday',
-      1: 'monday',
-      2: 'tuesday',
-      3: 'wednesday',
-      4: 'thursday',
-      5: 'friday',
-      6: 'saturday',
-    };
-
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(weekStartDate);
-      day.setDate(weekStartDate.getDate() + i);
-      const dateKey = dateFnsFormat(day, 'yyyy-MM-dd');
-      const dayOfWeekIndex = day.getDay();
-      const dayName = dayNameMap[dayOfWeekIndex];
-      const dayStart = new Date(day);
-      dayStart.setHours(0, 0, 0, 0);
-
-      // Count activities for each time slot that are scheduled for this day
-      const dayActivities = activities.filter(activity => {
-        if (activity.status !== 'active') return false;
-
-        // Skip activities whose goal hasn't started yet
-        if (activity.goal.start_date) {
-          const goalStartDate = new Date(activity.goal.start_date);
-          goalStartDate.setHours(0, 0, 0, 0);
-          if (dayStart < goalStartDate) return false;
-        }
-
-        // Skip activities that have ended
-        if (activity.end_date) {
-          const activityEndDate = new Date(activity.end_date);
-          activityEndDate.setHours(23, 59, 59, 999);
-          if (dayStart > activityEndDate) return false;
-        }
-
-      // Check if activity is scheduled for this day based on frequency
-        if (activity.frequency_type === 'daily') {
-          return true;
-        } else if (activity.frequency_type === 'weekly') {
-          // Check if this day is in the scheduled days (support both short and long names)
-          const scheduledDays = activity.days_of_week || [];
-          const dayNamesLong = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-          const dayNamesShort = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-          const dayLong = dayNamesLong[dayOfWeekIndex];
-          const dayShort = dayNamesShort[dayOfWeekIndex];
-          return scheduledDays.some(d => {
-            const lower = d.toLowerCase();
-            return lower === dayLong || lower === dayShort;
-          });
-        } else if (activity.frequency_type === 'monthly') {
-          // Check if this is the scheduled day of the month
-          return activity.day_of_month === day.getDate();
-        }
-        return false;
-      });
-
-      const timeSlotCount = {
-        morning: dayActivities.filter(a => a.time_of_day === 'morning').length,
-        afternoon: dayActivities.filter(a => a.time_of_day === 'afternoon').length,
-        night: dayActivities.filter(a => a.time_of_day === 'night').length,
-        wholeDay: dayActivities.filter(a => !a.time_of_day || a.time_of_day === 'whole_day').length,
-      };
-
-      // Count completed check-ins for this specific day
-      // Only count check-ins that are marked as completed
-      const dayEnd = new Date(day);
-      dayEnd.setHours(23, 59, 59, 999);
-
-      const dayCheckIns = activityCheckIns.filter(c => {
-        const checkInDate = new Date(c.date);
-        // Check if check-in is on this day
-        if (checkInDate < dayStart || checkInDate > dayEnd) return false;
-        // Only count completed check-ins
-        return isCheckInDone(c);
-      });
-
-      // Group completed check-ins by time slot
-      const completedBySlot = {
-        morningCompleted: dayCheckIns.filter(c => {
-          const activity = activities.find(a => a.id === c.activity_id);
-          return activity?.time_of_day === 'morning';
-        }).length,
-        afternoonCompleted: dayCheckIns.filter(c => {
-          const activity = activities.find(a => a.id === c.activity_id);
-          return activity?.time_of_day === 'afternoon';
-        }).length,
-        nightCompleted: dayCheckIns.filter(c => {
-          const activity = activities.find(a => a.id === c.activity_id);
-          return activity?.time_of_day === 'night';
-        }).length,
-        wholeDayCompleted: dayCheckIns.filter(c => {
-          const activity = activities.find(a => a.id === c.activity_id);
-          return !activity?.time_of_day || activity?.time_of_day === 'whole_day';
-        }).length,
-      };
-
-      days[dateKey] = {
-        ...timeSlotCount,
-        ...completedBySlot,
-      };
-    }
-
-    return { 
-      days,
-      weeklyCompletionRate: habitsData.weeklyCompletionRate,
-      monthlyCompletionRate: habitsData.monthlyCompletionRate,
-    };
-  }, [activities, activityCheckIns, habitsData]);
+  const weeklyOverviewData = useWeeklyOverview({
+    activities,
+    checkIns: activityCheckIns,
+    weeklyCompletionRate: habitsData.weeklyCompletionRate,
+    monthlyCompletionRate: habitsData.monthlyCompletionRate,
+  });
 
   // NEW: Goals + Habits Card Data
   const goalsHabitsCardData = useMemo((): GoalsHabitsCardData => {
