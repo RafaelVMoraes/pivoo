@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Target, BookHeart } from 'lucide-react';
+import { Home, Target, Compass, BookHeart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -24,6 +24,13 @@ export const BottomNavigation = () => {
       icon: Target,
     },
     {
+      id: 'self-discovery',
+      tutorialId: 'nav-self-discovery',
+      label: t('nav.selfDiscovery'),
+      path: '/self-discovery',
+      icon: Compass,
+    },
+    {
       id: 'journaling',
       tutorialId: 'nav-journaling',
       label: t('nav.journaling'),
@@ -46,7 +53,7 @@ export const BottomNavigation = () => {
               onClick={() => navigate(item.path)}
               className={cn(
                 'flex flex-col items-center justify-center px-3 py-2 rounded-xl transition-all duration-200',
-                'flex-1 min-w-[60px] max-w-[120px]',
+                'flex-1 min-w-[64px] max-w-[110px]',
                 isActive
                   ? 'bg-primary text-primary-foreground shadow-glow scale-105'
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
