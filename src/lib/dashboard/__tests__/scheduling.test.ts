@@ -36,7 +36,7 @@ describe('isActivityScheduledOnDate', () => {
   });
 
   it('handles monthly frequencies on exact day only', () => {
-    const monthly = { ...baseActivity, frequency_type: 'monthly', day_of_month: 15 };
+    const monthly = { ...baseActivity, frequency_type: 'monthly' as const, day_of_month: 15 };
     expect(isActivityScheduledOnDate(monthly, new Date('2026-03-15T12:00:00.000Z'))).toBe(true);
     expect(isActivityScheduledOnDate(monthly, new Date('2026-03-16T12:00:00.000Z'))).toBe(false);
   });
