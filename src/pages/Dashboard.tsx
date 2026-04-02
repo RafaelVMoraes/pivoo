@@ -10,9 +10,15 @@ import { SelfDiscoveryLinearCard } from '@/components/dashboard/SelfDiscoveryLin
 import { TodaysFocusCard } from '@/components/dashboard/TodaysFocusCard';
 import { WeeklyOverviewCard } from '@/components/dashboard/WeeklyOverviewCard';
 import { DailyReflectionCard } from '@/components/dashboard/DailyReflectionCard';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export const Dashboard = () => {
   const { isGuest } = useAuth();
+  const navigate = useNavigate();
+  const { t } = useTranslation();
   const { 
     isLoading, 
     yearProgressData,
@@ -25,6 +31,20 @@ export const Dashboard = () => {
 
   return (
     <div className="space-y-4 animate-fade-in">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">{t('chatbot.dashboardModeTitle')}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col md:flex-row gap-3">
+          <Button className="md:flex-1" onClick={() => navigate('/ai-chatbot?mode=assistant_quick')}>
+            {t('chatbot.modeAssistantQuick')}
+          </Button>
+          <Button variant="secondary" className="md:flex-1" onClick={() => navigate('/ai-chatbot?mode=analysis_modules')}>
+            {t('chatbot.modeAnalysisModules')}
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* 1. Year Progress Card */}
       <div data-tutorial-id="dashboard-year-progress">
       <YearProgressCard 

@@ -19,7 +19,7 @@ interface AnalysisConfiguratorProps {
   moduleId: ModuleId;
   inputs: AnalysisInputs;
   onInputChange: <K extends keyof AnalysisInputs>(key: K, value: Partial<AnalysisInputs[K]>) => void;
-  onStart: () => void;
+  onStart: () => void | Promise<void>;
   isLoading: boolean;
   lifeAreas: LifeAreaWithStats[];
   goals: Goal[];

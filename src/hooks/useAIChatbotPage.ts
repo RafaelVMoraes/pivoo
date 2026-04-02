@@ -4,6 +4,7 @@ import { useSelfDiscovery } from '@/hooks/useSelfDiscovery';
 import { useGoals } from '@/hooks/useGoals';
 import { useAnalysisChat } from '@/hooks/useAnalysisChat';
 import type { AnalysisInputs, LifeAreaWithStats, ModuleId } from '@/components/chatbot/types';
+import { trackAIModeEvent } from '@/lib/aiModeEvents';
 
 const defaultInputs: AnalysisInputs = {
   capacityLoad: { scope: '', workHoursPerWeek: '40', sleepHoursPerDay: '8' },
@@ -18,6 +19,7 @@ export const useAIChatbotPage = () => {
   const [activeModule, setActiveModule] = useState<ModuleId | null>(null);
   const [inputs, setInputs] = useState<AnalysisInputs>(defaultInputs);
   const [initialOutput, setInitialOutput] = useState<string | null>(null);
+  const [hasTrackedFirstMessage, setHasTrackedFirstMessage] = useState(false);
 
   const { goals } = useGoals();
   const { goalsWithProgress, activities, activityCheckIns, lifeSnapshotData } = useDashboardStats();
@@ -236,6 +238,7 @@ export const useAIChatbotPage = () => {
     (moduleId: ModuleId) => {
       setActiveModule(moduleId);
       setInitialOutput(null);
+      setHasTrackedFirstMessage(false);
       clearSession();
     },
     [clearSession],
@@ -245,18 +248,43 @@ export const useAIChatbotPage = () => {
     setActiveModule(null);
     setInitialOutput(null);
     setInputs(defaultInputs);
+    setHasTrackedFirstMessage(false);
     clearSession();
   }, [clearSession]);
 
   const handleStartAnalysis = useCallback(async () => {
     const result = await startAnalysis();
-    if (result) setInitialOutput(result);
+    if (result) {
+      setInitialOutput(result);
+      return true;
+    }
+    return false;
   }, [startAnalysis]);
 
   const handleRestartAnalysis = useCallback(() => {
     setInitialOutput(null);
+    setHasTrackedFirstMessage(false);
     clearSession();
   }, [clearSession]);
+
+  const markFirstAnalysisMessage = useCallback(() => {
+    if (hasTrackedFirstMessage || !activeModule) return;
+    trackAIModeEvent({
+      event: 'first_message',
+      mode: 'analysis_modules',
+      moduleId: activeModule,
+    });
+    setHasTrackedFirstMessage(true);
+  }, [activeModule, hasTrackedFirstMessage]);
+
+  const markAnalysisCompleted = useCallback(() => {
+    if (!activeModule) return;
+    trackAIModeEvent({
+      event: 'analysis_completed',
+      mode: 'analysis_modules',
+      moduleId: activeModule,
+    });
+  }, [activeModule]);
 
   const canStart = useMemo(() => {
     if (!activeModule) return false;
@@ -290,5 +318,7 @@ export const useAIChatbotPage = () => {
     handleStartAnalysis,
     handleRestartAnalysis,
     sendMessage,
+    markFirstAnalysisMessage,
+    markAnalysisCompleted,
   };
 };

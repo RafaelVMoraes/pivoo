@@ -1,5 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ANALYSIS_MODULES } from '@/lib/chatbotModules';
 import { getLocalizedModuleContent } from '@/lib/chatbotModules';
 import {
@@ -8,12 +10,16 @@ import {
   AnalysisOutput,
   ChatInterface,
   ModuleSidebar,
+  AIModeIntroduction,
+  QuickAssistantPanel,
 } from '@/components/chatbot';
 import { useAIChatbotPage } from '@/hooks/useAIChatbotPage';
 import { useTranslation } from '@/hooks/useTranslation';
+import { trackAIModeEvent, type AIMode } from '@/lib/aiModeEvents';
 
 const AIChatbot = () => {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     activeModule,
     inputs,
@@ -31,7 +37,26 @@ const AIChatbot = () => {
     handleStartAnalysis,
     handleRestartAnalysis,
     sendMessage,
+    markFirstAnalysisMessage,
+    markAnalysisCompleted,
   } = useAIChatbotPage();
+
+  const mode = useMemo<AIMode>(() => {
+    const requestedMode = searchParams.get('mode');
+    return requestedMode === 'assistant_quick' ? 'assistant_quick' : 'analysis_modules';
+  }, [searchParams]);
+
+  useEffect(() => {
+    trackAIModeEvent({ event: 'mode_opened', mode });
+  }, [mode]);
+
+  const handleModeChange = (nextMode: AIMode) => {
+    setSearchParams({ mode: nextMode });
+  };
+
+  const handleQuickFirstMessage = () => {
+    trackAIModeEvent({ event: 'first_message', mode: 'assistant_quick' });
+  };
 
   if (!activeModule) {
     return (
@@ -39,24 +64,53 @@ const AIChatbot = () => {
         <div>
           <h1 className="text-2xl font-bold">{t('chatbot.aiAnalysis')}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {t('chatbot.selectModuleDescription')}
+            {mode === 'assistant_quick' ? t('chatbot.quickModeDescription') : t('chatbot.selectModuleDescription')}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-tutorial-id="ai-modules-grid">
-          {ANALYSIS_MODULES.map((module) => {
-            const isDisabled = module.requiresSelfDiscovery && !selfDiscoveryComplete;
-            return (
-              <ModuleCard
-                key={module.id}
-                module={module}
-                onSelect={() => handleSelectModule(module.id)}
-                disabled={isDisabled}
-                disabledReason={isDisabled ? t('chatbot.completeSelfDiscoveryFirst') : undefined}
-              />
-            );
-          })}
+        <div className="flex gap-2">
+          <Button variant={mode === 'assistant_quick' ? 'default' : 'outline'} onClick={() => handleModeChange('assistant_quick')}>
+            {t('chatbot.modeAssistantQuick')}
+          </Button>
+          <Button variant={mode === 'analysis_modules' ? 'default' : 'outline'} onClick={() => handleModeChange('analysis_modules')}>
+            {t('chatbot.modeAnalysisModules')}
+          </Button>
         </div>
+
+        <AIModeIntroduction t={t} />
+
+        {mode === 'assistant_quick' ? (
+          <QuickAssistantPanel onFirstMessage={handleQuickFirstMessage} />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-tutorial-id="ai-modules-grid">
+            {ANALYSIS_MODULES.map((module) => {
+              const isDisabled = module.requiresSelfDiscovery && !selfDiscoveryComplete;
+              return (
+                <ModuleCard
+                  key={module.id}
+                  module={module}
+                  onSelect={() => handleSelectModule(module.id)}
+                  disabled={isDisabled}
+                  disabledReason={isDisabled ? t('chatbot.completeSelfDiscoveryFirst') : undefined}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (mode !== 'analysis_modules') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={handleBackToModules} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            {t('chatbot.backToModes')}
+          </Button>
+        </div>
+        <QuickAssistantPanel onFirstMessage={handleQuickFirstMessage} />
       </div>
     );
   }
@@ -91,7 +145,10 @@ const AIChatbot = () => {
               moduleId={activeModule}
               inputs={inputs}
               onInputChange={handleInputChange}
-              onStart={handleStartAnalysis}
+              onStart={async () => {
+                const completed = await handleStartAnalysis();
+                if (completed) markAnalysisCompleted();
+              }}
               isLoading={isLoading}
               lifeAreas={lifeAreasWithStats}
               goals={goals.map((goal) => ({ id: goal.id, title: goal.title, priority: goal.priority }))}
@@ -110,7 +167,10 @@ const AIChatbot = () => {
           )}
 
           {hasInitialOutput && (
-            <div data-tutorial-id="ai-chat-interface"><ChatInterface messages={messages} isLoading={isLoading} onSendMessage={sendMessage} /></div>
+            <div data-tutorial-id="ai-chat-interface"><ChatInterface messages={messages} isLoading={isLoading} onSendMessage={(message) => {
+              markFirstAnalysisMessage();
+              void sendMessage(message);
+            }} /></div>
           )}
         </div>
       </div>
