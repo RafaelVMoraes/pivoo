@@ -8,7 +8,8 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint:i18n": "node scripts/i18n/check-missing-keys.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
