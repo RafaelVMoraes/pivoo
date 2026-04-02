@@ -29,26 +29,57 @@ git clone <YOUR_GIT_URL>
 # Step 2: Navigate to the project directory.
 cd <YOUR_PROJECT_NAME>
 
-# Step 3: Install the necessary dependencies.
+# Step 3: Create your environment file from the example.
+cp .env.example .env
+
+# Step 4: Fill in your Supabase values in .env.
+
+# Step 5: Install dependencies.
 npm i
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Step 6: Start the development server.
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Environment variables (required)
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+This project requires the following Vite environment variables:
 
-**Use GitHub Codespaces**
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Use `.env.example` as the source of truth for variable names and expected format.
+
+### Local setup
+
+1. Copy `.env.example` to `.env`.
+2. Populate values from your Supabase project settings.
+3. Never commit `.env` or any real credential-like value to git.
+
+### Secret/public key policy
+
+- `VITE_SUPABASE_PUBLISHABLE_KEY` is a **public/anon key** intended for client use, but it must still be managed with operational hygiene.
+- Never expose `service_role` keys in frontend code or Vite variables.
+- Rotate the publishable key if it is ever committed, shared in logs, or included in screenshots.
+- After rotation, update all environments (local/dev/staging/prod) before redeploying.
+
+## Supabase key rotation runbook
+
+1. In Supabase dashboard, rotate/regenerate the anon/publishable key for the project.
+2. Update `VITE_SUPABASE_PUBLISHABLE_KEY` and confirm `VITE_SUPABASE_URL` in each environment.
+3. Redeploy each environment.
+4. Validate login/session flows in each deployed environment.
+
+## Deploy/pipeline environment injection checklist
+
+No CI/CD pipeline files were found in this repository at the moment, so environment injection is expected to be configured in the hosting platform (for example, Lovable deploy settings).
+
+For each environment (dev/staging/prod), ensure:
+
+- `VITE_SUPABASE_URL` is set with the correct project URL.
+- `VITE_SUPABASE_PUBLISHABLE_KEY` is set with the active publishable key.
+- Variables are configured as build-time environment variables.
+- After any key rotation, a new deploy is triggered for every environment.
 
 ## What technologies are used for this project?
 
