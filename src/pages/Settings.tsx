@@ -1,6 +1,7 @@
 
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProfile } from '@/hooks/useProfile';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -27,6 +28,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { defaultNotificationSettings, getNotificationSettings, saveNotificationSettings, type NotificationSettings } from '@/notifications/notificationSettingsService';
 
 export const Settings = () => {
+  const navigate = useNavigate();
   const { user, isGuest, signOut } = useAuth();
   const { profile, loading, updateProfile } = useProfile();
   const { t } = useTranslation();
@@ -142,6 +144,17 @@ export const Settings = () => {
     return `${year}`;
   };
 
+  const handleGuestSignupNavigation = () => {
+    const authQuery = new URLSearchParams({
+      tab: 'signup',
+      intent: 'settings-access',
+      returnTo: '/settings',
+      year: String(selectedYear),
+    });
+
+    navigate(`/auth?${authQuery.toString()}`);
+  };
+
   if (isGuest) {
     return (
       <div className="space-y-6 animate-fade-in">
@@ -181,7 +194,7 @@ export const Settings = () => {
                 {t('auth.signUpDescription')}
               </p>
             </div>
-            <Button onClick={() => window.location.href = '/auth'}>
+            <Button onClick={handleGuestSignupNavigation}>
               {t('auth.createAccount')}
             </Button>
           </CardContent>

@@ -57,6 +57,7 @@
 
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -73,10 +74,12 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { useSelfDiscoveryProgress } from '@/hooks/useSelfDiscoveryProgress';
 
 export const SelfDiscovery = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<'chart' | 'list'>('chart');
   const [showSummary, setShowSummary] = useState<boolean | null>(null); // null = not determined yet
+  const [activeTab, setActiveTab] = useState<'wheel' | 'values' | 'vision' | 'focus'>('wheel');
   const {
     loading,
     saving,
@@ -108,6 +111,18 @@ export const SelfDiscovery = () => {
       setShowSummary(hasVisionData && hasValues && hasLifeWheelData);
     }
   }, [loading, hasVisionData, hasValues, hasLifeWheelData, showSummary]);
+
+  const handleGuestSignupNavigation = () => {
+    const authQuery = new URLSearchParams({
+      tab: 'signup',
+      intent: 'self-discovery-save',
+      returnTo: '/self-discovery',
+      selfDiscoveryTab: activeTab,
+      selfDiscoveryView: viewMode,
+    });
+
+    navigate(`/auth?${authQuery.toString()}`);
+  };
 
   if (loading) {
     return (
@@ -157,7 +172,12 @@ export const SelfDiscovery = () => {
         )}
       </div>
 
-      <Tabs defaultValue="wheel" className="space-y-6" data-tutorial-id="self-discovery-tabs">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as 'wheel' | 'values' | 'vision' | 'focus')}
+        className="space-y-6"
+        data-tutorial-id="self-discovery-tabs"
+      >
         <TabsList className="grid grid-cols-4 w-full">
           <TabsTrigger value="wheel" className="text-xs">{t('selfDiscovery.lifeWheel')}</TabsTrigger>
           <TabsTrigger value="values" className="text-xs">{t('selfDiscovery.values')}</TabsTrigger>
@@ -243,7 +263,7 @@ export const SelfDiscovery = () => {
             <p className="text-sm text-primary font-medium mb-2">
               {t('selfDiscovery.guestNotice')}
             </p>
-            <Button variant="outline" size="sm" onClick={() => window.location.href = '/auth'}>
+            <Button variant="outline" size="sm" onClick={handleGuestSignupNavigation}>
               {t('selfDiscovery.signupToSave')}
             </Button>
           </CardContent>
