@@ -14,7 +14,6 @@ import { useTranslation } from '@/hooks/useTranslation';
 
 const AIChatbot = () => {
   const { t } = useTranslation();
-  const [searchParams, setSearchParams] = useSearchParams();
   const {
     activeModule,
     inputs,
@@ -35,23 +34,6 @@ const AIChatbot = () => {
     markFirstAnalysisMessage,
     markAnalysisCompleted,
   } = useAIChatbotPage();
-
-  const mode = useMemo<AIMode>(() => {
-    const requestedMode = searchParams.get('mode');
-    return requestedMode === 'assistant_quick' ? 'assistant_quick' : 'analysis_modules';
-  }, [searchParams]);
-
-  useEffect(() => {
-    trackAIModeEvent({ event: 'mode_opened', mode });
-  }, [mode]);
-
-  const handleModeChange = (nextMode: AIMode) => {
-    setSearchParams({ mode: nextMode });
-  };
-
-  const handleQuickFirstMessage = () => {
-    trackAIModeEvent({ event: 'first_message', mode: 'assistant_quick' });
-  };
 
   if (!activeModule) {
     return (
