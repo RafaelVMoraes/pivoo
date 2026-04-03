@@ -146,6 +146,8 @@
 
   html {
     scroll-behavior: smooth;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   body {
@@ -160,6 +162,22 @@
 }
 
 @layer utilities {
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-top-inset {
+    top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-bottom-offset {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+  }
+
   /* =====================
      Animations
      ===================== */
