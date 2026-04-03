@@ -31,21 +31,6 @@ export const Dashboard = () => {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">{t('chatbot.dashboardModeTitle')}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col md:flex-row gap-3">
-          <Button className="md:flex-1" onClick={() => navigate('/ai-chatbot?mode=assistant_quick')}>
-            {t('chatbot.modeAssistantQuick')}
-          </Button>
-          <Button variant="secondary" className="md:flex-1" onClick={() => navigate('/ai-chatbot?mode=analysis_modules')}>
-            {t('chatbot.modeAnalysisModules')}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <OnboardingContextCard />
 
       {/* 1. Year Progress Card */}
       <div data-tutorial-id="dashboard-year-progress">
