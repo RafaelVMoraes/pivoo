@@ -24,7 +24,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
   return (
     <div className="relative min-h-screen w-full bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-40 w-full bg-card/80 backdrop-blur-sm border-b border-border">
+      <header className="sticky top-0 z-40 w-full bg-card/80 backdrop-blur-sm border-b border-border safe-top">
         <div className="flex items-center justify-between px-4 py-3 max-w-7xl mx-auto">
           <h1 className="text-xl font-bold bg-gradient-primary bg-clip-text text-transparent">
             Pivoo
@@ -41,7 +41,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
       </header>
 
       {/* Main Content */}
-      <main className="w-full px-4 py-6 pb-24 max-w-7xl mx-auto">
+      <main className="w-full px-4 py-6 safe-bottom-offset max-w-7xl mx-auto">
         {children}
       </main>
 
