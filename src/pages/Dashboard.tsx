@@ -10,10 +10,6 @@ import { SelfDiscoveryLinearCard } from '@/components/dashboard/SelfDiscoveryLin
 import { TodaysFocusCard } from '@/components/dashboard/TodaysFocusCard';
 import { WeeklyOverviewCard } from '@/components/dashboard/WeeklyOverviewCard';
 import { DailyReflectionCard } from '@/components/dashboard/DailyReflectionCard';
-import { OnboardingContextCard } from '@/components/dashboard/OnboardingContextCard';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '@/hooks/useTranslation';
 
 export const Dashboard = () => {

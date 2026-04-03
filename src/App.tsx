@@ -63,9 +63,6 @@ const PostLoginRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!isGuest && shouldShowOnboarding) {
-    return <Navigate to="/onboarding-inicial" replace />;
-  }
 
   return <>{children}</>;
 };

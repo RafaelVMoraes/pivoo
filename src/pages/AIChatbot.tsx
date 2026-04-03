@@ -60,57 +60,21 @@ const AIChatbot = () => {
 
   if (!activeModule) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">{t('chatbot.aiAnalysis')}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {mode === 'assistant_quick' ? t('chatbot.quickModeDescription') : t('chatbot.selectModuleDescription')}
-          </p>
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-tutorial-id="ai-modules-grid">
+          {ANALYSIS_MODULES.map((module) => {
+            const isDisabled = module.requiresSelfDiscovery && !selfDiscoveryComplete;
+            return (
+              <ModuleCard
+                key={module.id}
+                module={module}
+                onSelect={() => handleSelectModule(module.id)}
+                disabled={isDisabled}
+                disabledReason={isDisabled ? t('chatbot.completeSelfDiscoveryFirst') : undefined}
+              />
+            );
+          })}
         </div>
-
-        <div className="flex gap-2">
-          <Button variant={mode === 'assistant_quick' ? 'default' : 'outline'} onClick={() => handleModeChange('assistant_quick')}>
-            {t('chatbot.modeAssistantQuick')}
-          </Button>
-          <Button variant={mode === 'analysis_modules' ? 'default' : 'outline'} onClick={() => handleModeChange('analysis_modules')}>
-            {t('chatbot.modeAnalysisModules')}
-          </Button>
-        </div>
-
-        <AIModeIntroduction t={t} />
-
-        {mode === 'assistant_quick' ? (
-          <QuickAssistantPanel onFirstMessage={handleQuickFirstMessage} />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-tutorial-id="ai-modules-grid">
-            {ANALYSIS_MODULES.map((module) => {
-              const isDisabled = module.requiresSelfDiscovery && !selfDiscoveryComplete;
-              return (
-                <ModuleCard
-                  key={module.id}
-                  module={module}
-                  onSelect={() => handleSelectModule(module.id)}
-                  disabled={isDisabled}
-                  disabledReason={isDisabled ? t('chatbot.completeSelfDiscoveryFirst') : undefined}
-                />
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (mode !== 'analysis_modules') {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={handleBackToModules} className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            {t('chatbot.backToModes')}
-          </Button>
-        </div>
-        <QuickAssistantPanel onFirstMessage={handleQuickFirstMessage} />
       </div>
     );
   }

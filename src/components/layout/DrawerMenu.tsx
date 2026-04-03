@@ -60,16 +60,6 @@ export const DrawerMenu = ({ open, onClose }: DrawerMenuProps) => {
             variant="ghost"
             className="w-full justify-start h-12 text-gray-900 dark:text-gray-100
                        hover:bg-gray-100 dark:hover:bg-gray-800"
-            onClick={() => handleNavigation("/ai-chatbot?mode=assistant_quick")}
-          >
-            <BrainCircuit className="mr-3 h-5 w-5" />
-            {t('nav.aiAssistantQuick')}
-          </Button>
-
-          <Button
-            variant="ghost"
-            className="w-full justify-start h-12 text-gray-900 dark:text-gray-100
-                       hover:bg-gray-100 dark:hover:bg-gray-800"
             onClick={() => handleNavigation("/ai-chatbot?mode=analysis_modules")}
           >
             <BrainCircuit className="mr-3 h-5 w-5" />
