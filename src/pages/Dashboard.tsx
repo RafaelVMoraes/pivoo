@@ -14,7 +14,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 
 export const Dashboard = () => {
   const { isGuest } = useAuth();
-  const navigate = useNavigate();
+  const { t } = useTranslation();
   const { t } = useTranslation();
   const { 
     isLoading, 

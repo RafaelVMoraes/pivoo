@@ -1,7 +1,5 @@
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { ANALYSIS_MODULES } from '@/lib/chatbotModules';
 import { getLocalizedModuleContent } from '@/lib/chatbotModules';
 import {
@@ -10,12 +8,9 @@ import {
   AnalysisOutput,
   ChatInterface,
   ModuleSidebar,
-  AIModeIntroduction,
-  QuickAssistantPanel,
 } from '@/components/chatbot';
 import { useAIChatbotPage } from '@/hooks/useAIChatbotPage';
 import { useTranslation } from '@/hooks/useTranslation';
-import { trackAIModeEvent, type AIMode } from '@/lib/aiModeEvents';
 
 const AIChatbot = () => {
   const { t } = useTranslation();
