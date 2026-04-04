@@ -239,7 +239,7 @@ export const Auth = () => {
   const [formData, setFormData] = useState({ email: '', password: '', name: '', confirmPassword: '' });
 
   useEffect(() => {
-    if (user) navigate('/onboarding-inicial');
+    if (user) navigate('/dashboard');
   }, [user, navigate]);
 
   useEffect(() => {
