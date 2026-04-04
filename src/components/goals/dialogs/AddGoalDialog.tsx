@@ -231,14 +231,14 @@ export const AddGoalDialog = ({ children, onRefresh }: AddGoalDialogProps) => {
       {/* Priority */}
       <div>
         <Label>{t('goal.priority')} *</Label>
-        <div className="flex gap-4 mt-2">
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {(['gold', 'silver', 'bronze'] as const).map(p => (
             <button
               key={p}
               type="button"
               title={t(`goal.priority.${p}`)}
               onClick={() => setPriority(p)}
-              className={`flex items-center justify-center px-6 py-4 rounded-full border-2 transition-all text-lg
+              className={`flex items-center justify-center rounded-2xl border-2 px-4 py-3 text-lg transition-all
                 ${priority === p
                   ? p === 'gold'
                     ? 'border-yellow-500 bg-yellow-500/10'
@@ -247,7 +247,7 @@ export const AddGoalDialog = ({ children, onRefresh }: AddGoalDialogProps) => {
                       : 'border-amber-700 bg-amber-700/10'
                   : 'border-border hover:border-primary/50'
                 }
-                min-w-[130px] min-h-[54px] font-medium
+                min-h-[54px] w-full font-medium
               `}
               style={{ padding: 0 }}
             >
@@ -527,7 +527,7 @@ export const AddGoalDialog = ({ children, onRefresh }: AddGoalDialogProps) => {
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-1rem)] max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {!canCreateGoal
@@ -575,19 +575,20 @@ export const AddGoalDialog = ({ children, onRefresh }: AddGoalDialogProps) => {
               {step === 4 && renderStep4()}
             </div>
 
-            <div className="flex justify-between gap-2 pt-4 border-t">
+            <div className="flex flex-wrap justify-between gap-2 border-t pt-4">
               {step > 1 && (
-                <Button type="button" variant="outline" onClick={() => setStep(step - 1)}>
+                <Button type="button" variant="outline" onClick={() => setStep(step - 1)} className="min-h-[44px] w-full sm:w-auto">
                   <ArrowLeft size={14} className="mr-2" />
                   {t('common.back')}
                 </Button>
               )}
-              <div className="flex-1" />
+              <div className="hidden flex-1 sm:block" />
               {step < 3 ? (
                 <Button
                   type="button"
                   onClick={() => setStep(step + 1)}
                   disabled={(step === 1 && !canProceedStep1) || (step === 2 && !canProceedStep2)}
+                  className="min-h-[44px] w-full sm:w-auto"
                 >
                   {t('common.next')}
                   <ArrowRight size={14} className="ml-2" />
@@ -597,6 +598,7 @@ export const AddGoalDialog = ({ children, onRefresh }: AddGoalDialogProps) => {
                   type="button"
                   onClick={handleNextFromStep3}
                   disabled={isSubmitting || !canProceedStep1 || !canProceedStep2}
+                  className="min-h-[44px] w-full sm:w-auto"
                 >
                   {isSubmitting ? t('goal.creating') : t('common.next')}
                   <ArrowRight size={14} className="ml-2" />
@@ -606,6 +608,7 @@ export const AddGoalDialog = ({ children, onRefresh }: AddGoalDialogProps) => {
                   type="button"
                   onClick={handleFinish}
                   disabled={isSubmitting}
+                  className="min-h-[44px] w-full sm:w-auto"
                 >
                   {t('common.finish')}
                 </Button>
