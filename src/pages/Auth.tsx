@@ -317,7 +317,7 @@ export const Auth = () => {
         toast({ title, description: desc, variant: 'destructive' });
       } else {
         toast({ title: t('auth.accountCreated'), description: t('auth.accountCreatedDesc') });
-        navigate('/onboarding-inicial');
+        navigate('/dashboard');
       }
     } catch {
       toast({ title: t('auth.signUpFailed'), description: t('auth.unexpectedError'), variant: 'destructive' });
