@@ -67,6 +67,20 @@ const PostLoginRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+const RootRedirect = () => {
+  const { user, isGuest, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="p-4 text-center text-sm text-muted-foreground">Loading…</div>;
+  }
+
+  if (user || isGuest) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Auth />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -80,7 +94,7 @@ const App = () => (
             <TutorialProvider>
               <Suspense fallback={<div className="p-4 text-center text-sm text-muted-foreground">Loading…</div>}>
                 <Routes>
-                  <Route path="/" element={<Auth />} />
+                  <Route path="/" element={<RootRedirect />} />
                   <Route path="/auth" element={<Auth />} />
                   <Route
                     path="/onboarding-inicial"
