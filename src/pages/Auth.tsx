@@ -293,7 +293,7 @@ export const Auth = () => {
       if (error) {
         toast({ title: t('auth.signInFailed'), description: error.message, variant: 'destructive' });
       } else {
-        navigate('/onboarding-inicial');
+        navigate('/dashboard');
       }
     } catch {
       toast({ title: t('auth.signInFailed'), description: t('auth.unexpectedError'), variant: 'destructive' });
