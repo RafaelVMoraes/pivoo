@@ -215,9 +215,9 @@ export const ActivityList = ({ goalId }: ActivityListProps) => {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h4 className="text-sm font-medium text-foreground">{t('activity.header')}</h4>
-        <Button size="sm" variant="outline" onClick={() => setIsAdding(true)} className="text-xs h-9 min-h-[44px] px-4">
+        <Button size="sm" variant="outline" onClick={() => setIsAdding(true)} className="h-9 min-h-[44px] w-full px-4 text-xs sm:w-auto">
           <Plus size={12} className="mr-1" />
           {t('activity.addButton')}
         </Button>
@@ -299,12 +299,12 @@ export const ActivityList = ({ goalId }: ActivityListProps) => {
             <FrequencySelector value={newFrequency} onChange={setNewFrequency} />
           )}
 
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handleAddActivity} disabled={!newTitle.trim() || !newDescription.trim()} className="min-h-[44px]">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button size="sm" onClick={handleAddActivity} disabled={!newTitle.trim() || !newDescription.trim()} className="min-h-[44px] w-full sm:w-auto">
               <Check size={12} className="mr-1" />
               {t('activity.addButton')}
             </Button>
-            <Button size="sm" variant="outline" onClick={resetNewForm} className="min-h-[44px]">
+            <Button size="sm" variant="outline" onClick={resetNewForm} className="min-h-[44px] w-full sm:w-auto">
               <X size={12} className="mr-1" />
               {t('common.cancel')}
             </Button>
@@ -387,12 +387,12 @@ export const ActivityList = ({ goalId }: ActivityListProps) => {
                   <FrequencySelector value={editFrequency} onChange={setEditFrequency} />
                 )}
 
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={handleSaveEdit} className="min-h-[44px]">
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button size="sm" onClick={handleSaveEdit} className="min-h-[44px] w-full sm:w-auto">
                     <Check size={12} className="mr-1" />
                     {t('common.save')}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setEditingId(null)} className="min-h-[44px]">
+                  <Button size="sm" variant="outline" onClick={() => setEditingId(null)} className="min-h-[44px] w-full sm:w-auto">
                     <X size={12} className="mr-1" />
                     {t('common.cancel')}
                   </Button>
@@ -400,7 +400,7 @@ export const ActivityList = ({ goalId }: ActivityListProps) => {
                     size="sm"
                     variant="destructive"
                     onClick={() => handleDeleteActivity(activity.id)}
-                    className="min-h-[44px] ml-auto"
+                    className="min-h-[44px] w-full sm:ml-auto sm:w-auto"
                   >
                     <Trash2 size={12} className="mr-1" />
                     {t('common.delete')}
@@ -414,7 +414,7 @@ export const ActivityList = ({ goalId }: ActivityListProps) => {
             <div key={activity.id} className="bg-accent/30 rounded-lg p-4 space-y-3">
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1 mb-1">
+                  <div className="mb-1 flex flex-wrap items-center gap-1">
                     <span className="text-sm font-medium text-foreground">{activity.title}</span>
                     {activity.activity_type === 'habit'&& (
                       <Badge
